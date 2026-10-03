@@ -257,9 +257,11 @@ function buildVideoList(info) {
 function startDownload(url, pageUrl, ytFormat, outdir, pageTitle, concurrent) {
   // Relative outdir = subfolder inside the user's Downloads folder (the
   // options page sends a subfolder name; an absolute path is used as-is).
+  // Resolved against the Downloads ROOT, not the default dir, so a pref of
+  // "VideoDownloader" doesn't nest into Downloads\VideoDownloader twice.
   let dir = getDefaultOutdir();
   if (outdir) {
-    dir = path.isAbsolute(outdir) ? outdir : path.join(dir, outdir);
+    dir = path.isAbsolute(outdir) ? outdir : path.join(getDownloadsRoot(), outdir);
   }
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -388,10 +390,14 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle, concurrent) {
   });
 }
 
-function getDefaultOutdir() {
-  // Downloads folder under user profile.
+function getDownloadsRoot() {
   const home = process.env.USERPROFILE || process.env.HOME || __dirname;
-  return path.join(home, "Downloads", "VideoDownloader");
+  return path.join(home, "Downloads");
+}
+
+function getDefaultOutdir() {
+  // Standalone default (no extension prefs): Downloads\VideoDownloader.
+  return path.join(getDownloadsRoot(), "VideoDownloader");
 }
 
 function findNewestFile(dir) {
