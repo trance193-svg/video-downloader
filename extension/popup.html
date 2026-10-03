@@ -12,21 +12,35 @@
         <img src="icons/icon48.png" alt="" id="logo" />
         <span>Video Downloader</span>
       </div>
-      <span id="hostStatus" class="status" title="Статус связи с локальным хостом">host: ?</span>
+      <span id="hostStatus" class="status" role="status" title="host: ?">host: ?</span>
     </header>
 
     <section id="pageBox" class="page-box">
       <div class="row">
-        <span class="label">Страница:</span>
+        <span class="label" data-i18n="pageLabel">Страница:</span>
         <span id="pageUrl" class="url" title=""></span>
       </div>
-      <button id="analyseBtn" class="primary">Найти видео (yt-dlp)</button>
-      <div id="hint" class="hint">
+      <button id="analyseBtn" class="primary" data-i18n="findVideoBtn">Найти видео (yt-dlp)</button>
+      <div id="hint" class="hint" data-i18n="hint">
         Нажмите, чтобы проанализировать ссылку этой страницы через yt-dlp.
       </div>
       <div class="manual-row">
-        <input id="manualUrl" type="text" placeholder="или вставьте URL видео / m3u8 вручную" />
-        <button id="manualBtn" class="small">Анализ</button>
+        <input
+          id="manualUrl"
+          type="text"
+          placeholder="или вставьте URL видео / m3u8 вручную"
+          data-i18n-placeholder="manualPlaceholder"
+        />
+        <button id="manualBtn" class="small" data-i18n="analyseSmall">Анализ</button>
+        <button
+          id="optionsBtn"
+          class="small ghost"
+          aria-label="Настройки"
+          data-i18n-aria="optionsAria"
+          title="⚙"
+        >
+          ⚙
+        </button>
       </div>
     </section>
 
@@ -42,23 +56,32 @@
     </section>
 
     <section id="detectedBox" class="detected">
-      <div class="section-head">Перехваченные потоки на странице</div>
+      <div class="section-head" data-i18n="detectedHead">Перехваченные потоки на странице</div>
       <div id="detectedList" class="detected-list"></div>
     </section>
 
     <section id="progressBox" class="progress hidden">
-      <div class="section-head">Скачивание</div>
-      <div class="bar"><div id="barFill"></div></div>
-      <div id="progressText" class="progress-text"></div>
-      <button id="cancelBtn" class="ghost">Отмена</button>
+      <div class="section-head" data-i18n="progressHead">Скачивание</div>
+      <div
+        id="progressBar"
+        class="bar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+      >
+        <div id="barFill"></div>
+      </div>
+      <div id="progressText" class="progress-text" aria-live="polite"></div>
+      <button id="cancelBtn" class="ghost" data-i18n="cancelBtn">Отмена</button>
     </section>
 
     <section id="doneBox" class="done hidden">
-      <div id="doneText" class="done-text"></div>
+      <div id="doneText" class="done-text" aria-live="polite"></div>
     </section>
 
     <section id="errorBox" class="error hidden">
-      <div id="errorText" class="error-text"></div>
+      <div id="errorText" class="error-text" role="alert"></div>
     </section>
 
     <footer>

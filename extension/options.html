@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Downloader</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body class="options-page">
+    <header>
+      <div class="logo">
+        <img src="icons/icon48.png" alt="" />
+        <span data-i18n="optHeader">Настройки загрузки</span>
+      </div>
+    </header>
+
+    <main class="options-form">
+      <div class="field">
+        <label for="outdirName" data-i18n="optSubfolderLabel">Подпапка в «Загрузках»</label>
+        <input id="outdirName" type="text" placeholder="VideoDownloader" />
+        <div class="field-hint" data-i18n="optSubfolderHint">
+          Файлы сохраняются в Загрузки\&lt;подпапка&gt;.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="maxHeight" data-i18n="optQualityLabel"
+          >Максимальное качество по умолчанию</label
+        >
+        <select id="maxHeight"></select>
+      </div>
+
+      <div class="field">
+        <label for="frag" data-i18n="optFragLabel">Параллельные фрагменты (скорость HLS)</label>
+        <input id="frag" type="number" min="1" max="16" step="1" value="4" />
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn" class="primary" data-i18n="optSave">Сохранить</button>
+        <span id="savedNote" class="saved-note hidden" aria-live="polite" data-i18n="optSaved"
+          >Сохранено ✓</span
+        >
+      </div>
+    </main>
+
+    <script src="options.js"></script>
+  </body>
+</html>

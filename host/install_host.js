@@ -30,6 +30,12 @@ const HOST_JS = path.join(HERE, "host.js");
 const MANIFEST_TEMPLATE = path.join(HERE, HOST_NAME + ".json");
 const LAUNCHER = path.join(HERE, "run_host.bat");
 
+// The extension's manifest pins its ID via the "key" field, so this ID is
+// stable across unpacked loads, CRX packs and the Chrome Web Store — no need
+// to copy it from chrome://extensions anymore. --extension-id= still works
+// as an override (e.g. for local forks).
+const PINNED_EXTENSION_ID = "eaeknaeblkegllnbgkhachbplimcldhp";
+
 function findNode() {
   // 1) node on PATH
   const which = spawnSync("where", ["node"], { encoding: "utf8" });
@@ -65,7 +71,9 @@ function writeLauncher(nodePath) {
 function renderManifest(launcherPath, extensionOrigin) {
   const tmpl = JSON.parse(fs.readFileSync(MANIFEST_TEMPLATE, "utf8"));
   tmpl.path = launcherPath;
-  tmpl.allowed_origins = extensionOrigin ? [extensionOrigin] : ["chrome-extension://PLACEHOLDER/"];
+  tmpl.allowed_origins = extensionOrigin
+    ? [extensionOrigin]
+    : ["chrome-extension://" + PINNED_EXTENSION_ID + "/"];
   const outPath = path.join(HERE, HOST_NAME + ".json");
   fs.writeFileSync(outPath, JSON.stringify(tmpl, null, 2), "utf8");
   return outPath;
@@ -104,9 +112,10 @@ function main() {
     if (a.startsWith("--extension-id=")) extensionId = a.slice("--extension-id=".length);
     if (a === "--help" || a === "-h") {
       console.log("Usage: node install_host.js [--extension-id=XXXXXXXX]");
-      console.log("  The extension ID is shown on chrome://extensions after loading");
-      console.log("  the unpacked extension. Re-run with the ID to allow the extension");
-      console.log("  to talk to this host.");
+      console.log("  By default the host allows the extension's pinned ID");
+      console.log("  (" + PINNED_EXTENSION_ID + "), same as on the Chrome Web Store.");
+      console.log("  Pass --extension-id only for a local fork with a different key —");
+      console.log("  its ID is shown on chrome://extensions.");
       process.exit(0);
     }
   }
@@ -130,13 +139,13 @@ function main() {
   const launcherPath = writeLauncher(nodePath);
   console.log("Launcher:       " + launcherPath);
 
-  const origin = extensionIdToOrigin(extensionId);
+  const origin = extensionIdToOrigin(extensionId || PINNED_EXTENSION_ID);
   const manifestPath = renderManifest(launcherPath, origin);
   console.log("Манифест:       " + manifestPath);
-  console.log(
-    "Allowed origin: " +
-      (origin || "(НЕ ЗАДАН — укажите --extension-id после загрузки расширения!)"),
-  );
+  console.log("Allowed origin: " + origin);
+  if (extensionId && extensionId !== PINNED_EXTENSION_ID) {
+    console.log("  (ID переопределён вручную через --extension-id)");
+  }
 
   console.log("\nРегистрация в реестре Windows (HKCU)…");
   const reg = registerInRegistry(manifestPath);
@@ -146,13 +155,6 @@ function main() {
   }
 
   console.log("\nГотово.");
-  if (!origin) {
-    console.log("\nВАЖНО: сейчас allowed_origins заполнен заглушкой.");
-    console.log("1) Загрузите распакованное расширение в chrome://extensions");
-    console.log("2) Скопируйте его ID (32 символа)");
-    console.log("3) Перезапустите установщик:");
-    console.log("     node install_host.js --extension-id=ВАШ_ID");
-  }
   console.log("\nЗатем перезапустите Chrome/Edge. Расширение сможет связываться с хостом.");
 }
 

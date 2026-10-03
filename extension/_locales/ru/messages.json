@@ -1,0 +1,109 @@
+{
+  "extName": { "message": "Video Downloader (yt-dlp)" },
+  "extDescription": {
+    "message": "Находит видео на любом сайте и скачивает его со звуком через yt-dlp + ffmpeg (локальный native host)."
+  },
+
+  "hostChecking": { "message": "host: проверка…" },
+  "hostOk": { "message": "host: подключён" },
+  "hostDown": { "message": "host: нет" },
+  "hostOff": { "message": "host: отключён" },
+
+  "pageLabel": { "message": "Страница:" },
+  "findVideoBtn": { "message": "Найти видео (yt-dlp)" },
+  "analysingBtn": { "message": "Анализ…" },
+  "hint": {
+    "message": "Нажмите, чтобы проанализировать ссылку этой страницы через yt-dlp."
+  },
+  "manualPlaceholder": { "message": "или вставьте URL видео / m3u8 вручную" },
+  "analyseSmall": { "message": "Анализ" },
+  "optionsAria": { "message": "Настройки" },
+
+  "detectedHead": { "message": "Перехваченные потоки на странице" },
+  "emptyDetected": {
+    "message": "Пока ничего не перехвачено. Запустите воспроизведение видео на странице."
+  },
+  "masterTag": { "message": "HLS мастер" },
+  "mediaTag": { "message": "медиа" },
+  "analyseThis": { "message": "анализ" },
+  "analyseThisTitle": { "message": "Анализировать этот URL через yt-dlp" },
+
+  "noActiveTab": { "message": "Нет активной вкладки с URL." },
+  "badManualUrl": { "message": "Введите полный URL, начиная с http(s)://" },
+  "analyseFailed": { "message": "Не удалось запустить анализ." },
+  "downloadFailed": { "message": "Не удалось начать скачивание." },
+  "notFound": {
+    "message": "Видео не найдено. Возможно, сайт не поддерживается yt-dlp напрямую — попробуйте проанализировать перехваченный поток выше."
+  },
+  "noTitle": { "message": "Без названия" },
+  "variants": { "message": "$N$ вариантов", "placeholders": { "n": { "content": "$1" } } },
+
+  "bestWithAudio": { "message": "Наилучшее со звуком" },
+  "bestWithAudioH": {
+    "message": "Наилучшее со звуком ($H$p)",
+    "placeholders": { "h": { "content": "$1" } }
+  },
+  "subMerged": { "message": "видео + звук (склеить)" },
+  "subSingle": { "message": "один файл" },
+  "downloadBtn": { "message": "Скачать" },
+
+  "progressHead": { "message": "Скачивание" },
+  "cancelBtn": { "message": "Отмена" },
+
+  "starting": { "message": "Запуск…" },
+  "etaPrefix": {
+    "message": "осталось $T$",
+    "placeholders": { "t": { "content": "$1" } }
+  },
+  "donePrefix": {
+    "message": "Готово! Файл сохранён: $P$",
+    "placeholders": { "p": { "content": "$1" } }
+  },
+  "doneFolder": { "message": "папка загрузок" },
+  "cancelled": { "message": "Скачивание отменено." },
+
+  "hostConnFailed": {
+    "message": "Не удалось подключиться к native host. Установите его (host/install_host.js)."
+  },
+  "hostNoAnswer": {
+    "message": "host не отвечает (не установлен или не запускается)"
+  },
+  "hostDied": { "message": "host отключился сразу после запуска" },
+  "hostUnavailable": { "message": "native host недоступен" },
+  "hostDisconnectedMsg": {
+    "message": "Соединение с native host разорвано. Перезапустите браузер или переустановите хост."
+  },
+
+  "mAnalysing": { "message": "Анализирую ссылку…" },
+  "mDownloading": { "message": "Начинаю скачивание…" },
+  "mReplacedList": { "message": "Предыдущая задача прервана — выполняю анализ." },
+  "mReplacedDownload": {
+    "message": "Предыдущая задача прервана — начинаю новое скачивание."
+  },
+  "mBadUrl": { "message": "Некорректная ссылка: ожидается http(s):// URL" },
+  "mLaunchFail": {
+    "message": "Не удалось запустить yt-dlp. Проверьте, что yt-dlp.exe находится в папке host/bin."
+  },
+  "mOutdirFail": { "message": "Не удалось создать папку вывода" },
+  "mYtdlpCode": {
+    "message": "yt-dlp завершился с кодом $C$",
+    "placeholders": { "c": { "content": "$1" } }
+  },
+  "mParseFail": { "message": "Не удалось разобрать ответ yt-dlp" },
+
+  "optTitle": { "message": "Настройки — Video Downloader" },
+  "optHeader": { "message": "Настройки загрузки" },
+  "optSubfolderLabel": { "message": "Подпапка в «Загрузках»" },
+  "optSubfolderHint": {
+    "message": "Файлы сохраняются в Загрузки\\<подпапка>. Оставьте пустым — сохранять прямо в «Загрузки»."
+  },
+  "optQualityLabel": { "message": "Максимальное качество по умолчанию" },
+  "optQualityBest": { "message": "Наилучшее доступное" },
+  "optQualityH": {
+    "message": "не выше $H$p",
+    "placeholders": { "h": { "content": "$1" } }
+  },
+  "optFragLabel": { "message": "Параллельные фрагменты (скорость HLS)" },
+  "optSave": { "message": "Сохранить" },
+  "optSaved": { "message": "Сохранено ✓" }
+}

@@ -5,10 +5,17 @@ const path = require("path");
 
 const url = process.argv[2];
 const fmt = process.argv[3] || "bestvideo*+bestaudio/best";
-if (!url) { console.log("usage: node test_download.js <video-url> [format]"); process.exit(1); }
+if (!url) {
+  console.log("usage: node test_download.js <video-url> [format]");
+  process.exit(1);
+}
 
 const bat = path.join(__dirname, "host", "run_host.bat");
-const p = spawn('"' + bat + '"', [], { stdio: ["pipe", "pipe", "pipe"], shell: true, windowsVerbatimArguments: true });
+const p = spawn('"' + bat + '"', [], {
+  stdio: ["pipe", "pipe", "pipe"],
+  shell: true,
+  windowsVerbatimArguments: true,
+});
 
 function send(obj) {
   const msg = Buffer.from(JSON.stringify(obj));
@@ -24,7 +31,9 @@ let progressCount = 0;
 let done = false;
 p.stdout.on("data", (d) => {
   out = Buffer.concat([out, d]);
-  try { drain(); } catch (_) {}
+  try {
+    drain();
+  } catch (_) {}
 });
 p.stderr.on("data", (d) => process.stderr.write("STDERR: " + d));
 
@@ -42,7 +51,10 @@ function drain() {
       console.log("DONE path:", body.path);
       const fs = require("fs");
       console.log("File exists:", fs.existsSync(body.path));
-      console.log("Local timestamp in name:", /T\d{2}-\d{2}-\d{2} - test_download/.test(body.path) ? "OK" : "CHECK: " + body.path);
+      console.log(
+        "Local timestamp in name:",
+        /T\d{2}-\d{2}-\d{2} - test_download/.test(body.path) ? "OK" : "CHECK: " + body.path,
+      );
       p.kill();
       process.exit(0);
     } else if (body.type === "ERROR" && !done) {
@@ -55,4 +67,10 @@ function drain() {
     out = out.subarray(4 + n);
   }
 }
-setTimeout(() => { if (!done) { console.log("TIMEOUT after 120s; progress so far:", progressCount); p.kill(); process.exit(2); } }, 120000);
+setTimeout(() => {
+  if (!done) {
+    console.log("TIMEOUT after 120s; progress so far:", progressCount);
+    p.kill();
+    process.exit(2);
+  }
+}, 120000);

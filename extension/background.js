@@ -22,6 +22,16 @@ const HOST_NAME = "com.videodownloader.host";
 const MEDIA_RE = /\.(m3u8|mpd|mp4|webm|m4v|ts|mov|mkv|flv|avi|m4a|mp3|ogg)(\?|$)/i;
 // These look like HLS/DASH manifests specifically.
 const PLAYLIST_RE = /\.(m3u8|mpd)(\?|$)/i;
+// Master m3u8s list video variants AND the audio track; sub-playlists
+// ("media_NNN.m3u8") are video-only. Marking masters lets the popup prefer
+// them — downloading a sub gives a silent file. Common master names across
+// CDNs: playlist/master (Vimeo), index/main (Apple-style), manifest
+// (AWS MediaPackage and others).
+const MASTER_RE = /\/(playlist|master|index|main|manifest)\.m3u8(\?|$)/i;
+
+function isMasterPlaylistUrl(url) {
+  return PLAYLIST_RE.test(url) && MASTER_RE.test(url);
+}
 
 // Native messaging port to the local host. Spawned lazily by ensureHost().
 let hostPort = null;
@@ -41,11 +51,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     const stream = {
       url,
       type: isPlaylist ? "playlist" : "media",
-      // A master m3u8 (e.g. Vimeo "playlist.m3u8") lists video variants AND
-      // the audio track; a sub-playlist like "media.m3u8" is video-only.
-      // Marking masters lets the popup prefer them — downloading a sub gives
-      // a silent file.
-      master: isPlaylist && /\/(playlist|master)\.m3u8(\?|$)/i.test(url),
+      master: isMasterPlaylistUrl(url),
       contentType: details.type || null,
       frameUrl: details.initiator || null,
       ts: Date.now(),
@@ -133,7 +139,7 @@ function ensureHost() {
     // Resolve a pending PING as failed so the popup doesn't hang for the
     // full timeout when the host process dies immediately.
     if (pingWaiter) {
-      pingWaiter({ ok: false, error: "host отключился сразу после запуска" });
+      pingWaiter({ ok: false, error: chrome.i18n.getMessage("hostDied") });
       pingWaiter = null;
     }
     // Notify popup if open.
@@ -204,7 +210,13 @@ function handleHostMessage(msg) {
       // "Начинаю скачивание…" / "Анализирую ссылку…" from the host marks the
       // start of a long-running job — arm the keep-alive so the SW survives.
       if (msg.level === "info") startKeepAlive();
-      broadcastToPopups({ type: "LOG", message: msg.message, level: msg.level });
+      broadcastToPopups({
+        type: "LOG",
+        message: msg.message,
+        key: msg.key || null,
+        params: msg.params || null,
+        level: msg.level,
+      });
       break;
     case "LIST_RESULT":
       lastListResult = msg;
@@ -232,7 +244,12 @@ function handleHostMessage(msg) {
       lastError = msg;
       saveUiState("lastError", msg);
       stopKeepAlive();
-      broadcastToPopups({ type: "ERROR", message: msg.message });
+      broadcastToPopups({
+        type: "ERROR",
+        message: msg.message,
+        key: msg.key || null,
+        params: msg.params || null,
+      });
       break;
     case "KILLED":
       stopKeepAlive();
@@ -250,7 +267,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const stream = {
       url: msg.url,
       type: PLAYLIST_RE.test(msg.url) ? "playlist" : "media",
-      master: PLAYLIST_RE.test(msg.url) && /\/(playlist|master)\.m3u8(\?|$)/i.test(msg.url),
+      master: isMasterPlaylistUrl(msg.url),
       contentType: null,
       frameUrl: msg.frameUrl || null,
       source: msg.source || "content",
@@ -265,10 +282,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "PING_HOST": {
         const port = ensureHost();
         if (!port) {
-          sendResponse({
-            ok: false,
-            error: "Не удалось подключиться к native host. Установите его (host/install_host.js).",
-          });
+          sendResponse({ ok: false, error: chrome.i18n.getMessage("hostConnFailed") });
           return;
         }
         // Honest round-trip: reply only after the host actually answers PONG
@@ -281,7 +295,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           setTimeout(() => {
             if (pingWaiter === resolve) {
               pingWaiter = null;
-              resolve({ ok: false, error: "host не отвечает (не установлен или не запускается)" });
+              resolve({ ok: false, error: chrome.i18n.getMessage("hostNoAnswer") });
             }
           }, 3000);
         });
@@ -309,7 +323,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // Ask host to run yt-dlp -J on the URL.
         const port = ensureHost();
         if (!port) {
-          sendResponse({ ok: false, error: "native host недоступен" });
+          sendResponse({ ok: false, error: chrome.i18n.getMessage("hostUnavailable") });
           return;
         }
         lastError = null;
@@ -329,9 +343,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "DOWNLOAD": {
         const port = ensureHost();
         if (!port) {
-          sendResponse({ ok: false, error: "native host недоступен" });
+          sendResponse({ ok: false, error: chrome.i18n.getMessage("hostUnavailable") });
           return;
         }
+        // User preferences (options page) override whatever the popup guessed.
+        const prefs = await chrome.storage.sync.get({
+          outdirName: "VideoDownloader",
+          frag: 4,
+        });
         lastError = null;
         lastDone = null;
         lastProgress = null;
@@ -344,7 +363,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           pageUrl: msg.pageUrl || "",
           pageTitle: msg.pageTitle || "",
           ytFormat: msg.ytFormat || "bestvideo*+bestaudio/best",
-          outdir: msg.outdir || "",
+          outdir: msg.outdir || prefs.outdirName || "",
+          concurrent: prefs.frag || 4,
         });
         sendResponse({ ok: true });
         return;

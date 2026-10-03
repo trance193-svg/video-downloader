@@ -277,6 +277,18 @@ button:disabled {
   text-decoration: none;
   font-size: 11px;
 }
+/* Button reset so the keyboard-focusable "analyse" action looks like the
+   old link but is reachable with Tab and Enter. */
+.detected-item .open.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+}
+.detected-item .open.linklike:focus-visible {
+  outline: 1px solid var(--accent-2);
+  border-radius: 2px;
+}
 .detected-item .open:hover {
   color: var(--text);
 }
@@ -330,4 +342,13 @@ footer {
 
 .hidden {
   display: none !important;
+}
+
+/* Keyboard accessibility: visible focus for all interactive elements. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 1px;
 }

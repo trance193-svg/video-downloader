@@ -1,0 +1,110 @@
+{
+  "extName": { "message": "Video Downloader (yt-dlp)" },
+  "extDescription": {
+    "message": "Finds videos on any site and downloads them with sound via yt-dlp + ffmpeg (local native host)."
+  },
+
+  "hostChecking": { "message": "host: checking…" },
+  "hostOk": { "message": "host: connected" },
+  "hostDown": { "message": "host: missing" },
+  "hostOff": { "message": "host: disconnected" },
+
+  "pageLabel": { "message": "Page:" },
+  "findVideoBtn": { "message": "Find video (yt-dlp)" },
+  "analysingBtn": { "message": "Analysing…" },
+  "hint": { "message": "Click to analyse this page's URL via yt-dlp." },
+  "manualPlaceholder": { "message": "or paste a video / m3u8 URL manually" },
+  "analyseSmall": { "message": "Analyse" },
+  "optionsAria": { "message": "Settings" },
+
+  "detectedHead": { "message": "Streams detected on this page" },
+  "emptyDetected": {
+    "message": "Nothing detected yet. Start playing the video on the page."
+  },
+  "masterTag": { "message": "HLS master" },
+  "mediaTag": { "message": "media" },
+  "analyseThis": { "message": "analyse" },
+  "analyseThisTitle": { "message": "Analyse this URL via yt-dlp" },
+
+  "noActiveTab": { "message": "No active tab with a URL." },
+  "badManualUrl": { "message": "Enter a full URL starting with http(s)://" },
+  "analyseFailed": { "message": "Failed to start the analysis." },
+  "downloadFailed": { "message": "Failed to start the download." },
+  "notFound": {
+    "message": "No video found. The site may not be directly supported by yt-dlp — try analysing one of the detected streams above."
+  },
+  "noTitle": { "message": "Untitled" },
+  "variants": {
+    "message": "$N$ option(s)",
+    "placeholders": { "n": { "content": "$1" } }
+  },
+
+  "bestWithAudio": { "message": "Best with audio" },
+  "bestWithAudioH": {
+    "message": "Best with audio ($H$p)",
+    "placeholders": { "h": { "content": "$1" } }
+  },
+  "subMerged": { "message": "video + audio (merge)" },
+  "subSingle": { "message": "single file" },
+  "downloadBtn": { "message": "Download" },
+
+  "progressHead": { "message": "Download" },
+  "cancelBtn": { "message": "Cancel" },
+
+  "starting": { "message": "Starting…" },
+  "etaPrefix": {
+    "message": "eta $T$",
+    "placeholders": { "t": { "content": "$1" } }
+  },
+  "donePrefix": {
+    "message": "Done! Saved to: $P$",
+    "placeholders": { "p": { "content": "$1" } }
+  },
+  "doneFolder": { "message": "downloads folder" },
+  "cancelled": { "message": "Download cancelled." },
+
+  "hostConnFailed": {
+    "message": "Could not connect to the native host. Install it (host/install_host.js)."
+  },
+  "hostNoAnswer": {
+    "message": "host is not responding (not installed or fails to start)"
+  },
+  "hostDied": { "message": "host disconnected right after start" },
+  "hostUnavailable": { "message": "native host unavailable" },
+  "hostDisconnectedMsg": {
+    "message": "Connection to the native host was lost. Restart the browser or reinstall the host."
+  },
+
+  "mAnalysing": { "message": "Analysing the link…" },
+  "mDownloading": { "message": "Starting the download…" },
+  "mReplacedList": { "message": "Previous job interrupted — analysing." },
+  "mReplacedDownload": {
+    "message": "Previous job interrupted — starting a new download."
+  },
+  "mBadUrl": { "message": "Invalid link: expected an http(s):// URL" },
+  "mLaunchFail": {
+    "message": "Could not launch yt-dlp. Make sure yt-dlp.exe is in the host/bin folder."
+  },
+  "mOutdirFail": { "message": "Could not create the output folder" },
+  "mYtdlpCode": {
+    "message": "yt-dlp exited with code $C$",
+    "placeholders": { "c": { "content": "$1" } }
+  },
+  "mParseFail": { "message": "Could not parse the yt-dlp response" },
+
+  "optTitle": { "message": "Settings — Video Downloader" },
+  "optHeader": { "message": "Download settings" },
+  "optSubfolderLabel": { "message": "Subfolder inside Downloads" },
+  "optSubfolderHint": {
+    "message": "Files are saved to Downloads\\<subfolder>. Leave empty to save straight into Downloads."
+  },
+  "optQualityLabel": { "message": "Default maximum quality" },
+  "optQualityBest": { "message": "Best available" },
+  "optQualityH": {
+    "message": "up to $H$p",
+    "placeholders": { "h": { "content": "$1" } }
+  },
+  "optFragLabel": { "message": "Concurrent fragments (HLS speed)" },
+  "optSave": { "message": "Save" },
+  "optSaved": { "message": "Saved ✓" }
+}

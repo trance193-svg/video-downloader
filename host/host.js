@@ -143,6 +143,7 @@ function listFormats(url, pageUrl) {
     proc.on("error", (e) => {
       currentJob = null;
       resolve({
+        errorKey: "mLaunchFail",
         error:
           "Не удалось запустить yt-dlp. Проверьте, что yt-dlp.exe находится в папке host/bin. " +
           e.message,
@@ -152,14 +153,17 @@ function listFormats(url, pageUrl) {
     proc.on("close", (code) => {
       currentJob = null;
       if (code !== 0) {
-        resolve({ error: trim(errBuf) || "yt-dlp завершился с кодом " + code });
+        resolve({ errorKey: null, error: trim(errBuf) || "yt-dlp code " + code });
         return;
       }
       try {
         const info = JSON.parse(outBuf.toString("utf8"));
         resolve({ info });
       } catch (e) {
-        resolve({ error: "Не удалось разобрать ответ yt-dlp: " + e.message });
+        resolve({
+          errorKey: "mParseFail",
+          error: "Не удалось разобрать ответ yt-dlp: " + e.message,
+        });
       }
     });
   });
@@ -195,6 +199,7 @@ function buildVideoList(info) {
     Math.max(0, ...progressive.map((f) => f.height || 0));
   videos.push({
     id: "best",
+    kind: "best",
     label: bestHeight ? `Наилучшее со звуком (${bestHeight}p)` : "Наилучшее со звуком",
     height: bestHeight,
     hasAudio: true,
@@ -210,8 +215,11 @@ function buildVideoList(info) {
     seen.add(key);
     videos.push({
       id: f.format_id,
+      kind: "video-only",
       label: label(f) + " (видео+звук)",
       height: f.height || 0,
+      fps: f.fps ? Math.round(f.fps) : null,
+      ext: f.ext || null,
       hasAudio: true, // we will merge with audio on download
       ytFormat: f.format_id + "+bestaudio/best",
       filesize: f.filesize || f.filesize_approx || null,
@@ -226,8 +234,11 @@ function buildVideoList(info) {
     seen.add(key);
     videos.push({
       id: f.format_id,
+      kind: "progressive",
       label: label(f) + " (один файл)",
       height: f.height || 0,
+      fps: f.fps ? Math.round(f.fps) : null,
+      ext: f.ext || null,
       hasAudio: true,
       ytFormat: f.format_id,
       filesize: f.filesize || f.filesize_approx || null,
@@ -243,14 +254,24 @@ function buildVideoList(info) {
 // when the format selector requires it (bestvideo+bestaudio). We parse
 // progress from stderr progress lines.
 // ---------------------------------------------------------------------------
-function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
-  const dir = outdir || getDefaultOutdir();
+function startDownload(url, pageUrl, ytFormat, outdir, pageTitle, concurrent) {
+  // Relative outdir = subfolder inside the user's Downloads folder (the
+  // options page sends a subfolder name; an absolute path is used as-is).
+  let dir = getDefaultOutdir();
+  if (outdir) {
+    dir = path.isAbsolute(outdir) ? outdir : path.join(dir, outdir);
+  }
   try {
     fs.mkdirSync(dir, { recursive: true });
   } catch (e) {
-    sendMessage({ type: "ERROR", message: "Не удалось создать папку вывода: " + e.message });
+    sendMessage({
+      type: "ERROR",
+      key: "mOutdirFail",
+      message: "Не удалось создать папку вывода: " + e.message,
+    });
     return;
   }
+  const fragCount = Math.min(16, Math.max(1, parseInt(concurrent, 10) || 4));
 
   // Prefer the lesson page's <title> as the filename — yt-dlp can't extract a
   // title/id from a bare Vimeo m3u8, so without this every download would
@@ -280,7 +301,7 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
     "mp4",
     "--no-overwrites",
     "--concurrent-fragments",
-    "4",
+    String(fragCount),
     // Keep .part files: a cancelled/killed download then leaves a clearly
     // incomplete *.part instead of a truncated file that looks finished.
     "-o",
@@ -358,6 +379,8 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
     } else {
       sendMessage({
         type: "ERROR",
+        key: trim(stderrBuf) ? null : "mYtdlpCode",
+        params: trim(stderrBuf) ? null : [String(code)],
         message: trim(stderrBuf) || "yt-dlp завершился с кодом " + code,
       });
     }
@@ -417,6 +440,8 @@ async function handle(msg) {
     if (!isValidUrl(msg.url)) {
       sendMessage({
         type: "ERROR",
+        key: "mBadUrl",
+        params: [String(msg.url).slice(0, 80)],
         message:
           "Некорректная ссылка: ожидается http(s):// URL, получено: " +
           String(msg.url).slice(0, 80),
@@ -434,6 +459,7 @@ async function handle(msg) {
       sendMessage({
         type: "LOG",
         level: "info",
+        key: cmd === "LIST" ? "mReplacedList" : "mReplacedDownload",
         message:
           cmd === "LIST"
             ? "Предыдущая задача прервана — выполняю анализ."
@@ -443,10 +469,10 @@ async function handle(msg) {
   }
 
   if (cmd === "LIST") {
-    sendMessage({ type: "LOG", level: "info", message: "Анализирую ссылку…" });
+    sendMessage({ type: "LOG", level: "info", key: "mAnalysing", message: "Анализирую ссылку…" });
     const res = await listFormats(msg.url, msg.pageUrl);
     if (res.error) {
-      sendMessage({ type: "ERROR", message: res.error });
+      sendMessage({ type: "ERROR", key: res.errorKey || null, message: res.error });
       maybeExitAfterJob();
       return;
     }
@@ -460,9 +486,10 @@ async function handle(msg) {
     sendMessage({
       type: "LOG",
       level: "info",
+      key: "mDownloading",
       message: "Начинаю скачивание…",
     });
-    startDownload(msg.url, msg.pageUrl, msg.ytFormat, msg.outdir, msg.pageTitle);
+    startDownload(msg.url, msg.pageUrl, msg.ytFormat, msg.outdir, msg.pageTitle, msg.concurrent);
     return;
   }
 
