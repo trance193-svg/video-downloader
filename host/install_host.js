@@ -44,7 +44,9 @@ function findNode() {
     path.join(process.env.LOCALAPPDATA || "", "Programs", "node", "node.exe"),
   ];
   for (const c of candidates) {
-    try { if (fs.existsSync(c)) return c; } catch (_) {}
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch (_) {}
   }
   return null;
 }
@@ -55,9 +57,7 @@ function writeLauncher(nodePath) {
   // .bat content pure ASCII: cmd reads batch files in the legacy OEM code
   // page, so a literal non-ASCII project path (e.g. C:\Разработка\) written
   // in UTF-8 would be mangled into a nonexistent path.
-  const bat =
-    "@echo off\r\n" +
-    `"${nodePath}" "%~dp0host.js"\r\n`;
+  const bat = "@echo off\r\n" + `"${nodePath}" "%~dp0host.js"\r\n`;
   fs.writeFileSync(LAUNCHER, bat, "utf8");
   return LAUNCHER;
 }
@@ -115,7 +115,9 @@ function main() {
 
   const nodePath = findNode();
   if (!nodePath) {
-    console.error("ОШИБКА: Node.js не найден. Установите Node.js (https://nodejs.org) и повторите.");
+    console.error(
+      "ОШИБКА: Node.js не найден. Установите Node.js (https://nodejs.org) и повторите.",
+    );
     process.exit(1);
   }
   console.log("Node.js:        " + nodePath);
@@ -131,7 +133,10 @@ function main() {
   const origin = extensionIdToOrigin(extensionId);
   const manifestPath = renderManifest(launcherPath, origin);
   console.log("Манифест:       " + manifestPath);
-  console.log("Allowed origin: " + (origin || "(НЕ ЗАДАН — укажите --extension-id после загрузки расширения!)"));
+  console.log(
+    "Allowed origin: " +
+      (origin || "(НЕ ЗАДАН — укажите --extension-id после загрузки расширения!)"),
+  );
 
   console.log("\nРегистрация в реестре Windows (HKCU)…");
   const reg = registerInRegistry(manifestPath);

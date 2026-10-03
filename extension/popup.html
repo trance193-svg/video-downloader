@@ -1,68 +1,70 @@
 <!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Video Downloader</title>
-  <link rel="stylesheet" href="popup.css" />
-</head>
-<body>
-  <header>
-    <div class="logo">
-      <img src="icons/icon48.png" alt="" id="logo" />
-      <span>Video Downloader</span>
-    </div>
-    <span id="hostStatus" class="status" title="Статус связи с локальным хостом">host: ?</span>
-  </header>
-
-  <section id="pageBox" class="page-box">
-    <div class="row">
-      <span class="label">Страница:</span>
-      <span id="pageUrl" class="url" title=""></span>
-    </div>
-    <button id="analyseBtn" class="primary">Найти видео (yt-dlp)</button>
-    <div id="hint" class="hint">Нажмите, чтобы проанализировать ссылку этой страницы через yt-dlp.</div>
-    <div class="manual-row">
-      <input id="manualUrl" type="text" placeholder="или вставьте URL видео / m3u8 вручную" />
-      <button id="manualBtn" class="small">Анализ</button>
-    </div>
-  </section>
-
-  <section id="resultBox" class="result hidden">
-    <div class="title-row">
-      <img id="thumb" alt="" class="thumb hidden" />
-      <div>
-        <div id="videoTitle" class="video-title"></div>
-        <div id="videoMeta" class="meta"></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Downloader</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo">
+        <img src="icons/icon48.png" alt="" id="logo" />
+        <span>Video Downloader</span>
       </div>
-    </div>
-    <div id="videos" class="videos"></div>
-  </section>
+      <span id="hostStatus" class="status" title="Статус связи с локальным хостом">host: ?</span>
+    </header>
 
-  <section id="detectedBox" class="detected">
-    <div class="section-head">Перехваченные потоки на странице</div>
-    <div id="detectedList" class="detected-list"></div>
-  </section>
+    <section id="pageBox" class="page-box">
+      <div class="row">
+        <span class="label">Страница:</span>
+        <span id="pageUrl" class="url" title=""></span>
+      </div>
+      <button id="analyseBtn" class="primary">Найти видео (yt-dlp)</button>
+      <div id="hint" class="hint">
+        Нажмите, чтобы проанализировать ссылку этой страницы через yt-dlp.
+      </div>
+      <div class="manual-row">
+        <input id="manualUrl" type="text" placeholder="или вставьте URL видео / m3u8 вручную" />
+        <button id="manualBtn" class="small">Анализ</button>
+      </div>
+    </section>
 
-  <section id="progressBox" class="progress hidden">
-    <div class="section-head">Скачивание</div>
-    <div class="bar"><div id="barFill"></div></div>
-    <div id="progressText" class="progress-text"></div>
-    <button id="cancelBtn" class="ghost">Отмена</button>
-  </section>
+    <section id="resultBox" class="result hidden">
+      <div class="title-row">
+        <img id="thumb" alt="" class="thumb hidden" />
+        <div>
+          <div id="videoTitle" class="video-title"></div>
+          <div id="videoMeta" class="meta"></div>
+        </div>
+      </div>
+      <div id="videos" class="videos"></div>
+    </section>
 
-  <section id="doneBox" class="done hidden">
-    <div id="doneText" class="done-text"></div>
-  </section>
+    <section id="detectedBox" class="detected">
+      <div class="section-head">Перехваченные потоки на странице</div>
+      <div id="detectedList" class="detected-list"></div>
+    </section>
 
-  <section id="errorBox" class="error hidden">
-    <div id="errorText" class="error-text"></div>
-  </section>
+    <section id="progressBox" class="progress hidden">
+      <div class="section-head">Скачивание</div>
+      <div class="bar"><div id="barFill"></div></div>
+      <div id="progressText" class="progress-text"></div>
+      <button id="cancelBtn" class="ghost">Отмена</button>
+    </section>
 
-  <footer>
-    <span class="muted">yt-dlp + ffmpeg · native host</span>
-  </footer>
+    <section id="doneBox" class="done hidden">
+      <div id="doneText" class="done-text"></div>
+    </section>
 
-  <script src="popup.js"></script>
-</body>
+    <section id="errorBox" class="error hidden">
+      <div id="errorText" class="error-text"></div>
+    </section>
+
+    <footer>
+      <span class="muted">yt-dlp + ffmpeg · native host</span>
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
 </html>

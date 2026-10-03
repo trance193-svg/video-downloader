@@ -55,7 +55,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     updateBadge(details.tabId);
   },
   { urls: ["<all_urls>"] },
-  []
+  [],
 );
 
 async function addStreamToTab(tabId, stream) {
@@ -86,7 +86,7 @@ async function updateBadge(tabId) {
     const list = data[key] || [];
     // Count only "interesting" streams (manifests + direct media), not every .ts.
     const count = list.filter(
-      (s) => s.type === "playlist" || /\.(mp4|webm|mkv|mov|flv|avi)/i.test(s.url)
+      (s) => s.type === "playlist" || /\.(mp4|webm|mkv|mov|flv|avi)/i.test(s.url),
     ).length;
     const text = count > 0 ? String(count) : "";
     await chrome.action.setBadgeText({ tabId, text });
@@ -168,9 +168,7 @@ function loadUiState() {
   if (!uiStateLoaded) {
     uiStateLoaded = (async () => {
       try {
-        const data = await chrome.storage.session.get(
-          UI_STATE_KEYS.map((k) => "ui_" + k)
-        );
+        const data = await chrome.storage.session.get(UI_STATE_KEYS.map((k) => "ui_" + k));
         for (const k of UI_STATE_KEYS) {
           const v = data["ui_" + k];
           if (v === undefined) continue;
@@ -211,7 +209,13 @@ function handleHostMessage(msg) {
     case "LIST_RESULT":
       lastListResult = msg;
       saveUiState("lastListResult", msg);
-      broadcastToPopups({ type: "LIST_RESULT", title: msg.title, thumb: msg.thumb, videos: msg.videos, url: lastListResultUrl });
+      broadcastToPopups({
+        type: "LIST_RESULT",
+        title: msg.title,
+        thumb: msg.thumb,
+        videos: msg.videos,
+        url: lastListResultUrl,
+      });
       break;
     case "PROGRESS":
       lastProgress = msg;
@@ -261,7 +265,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "PING_HOST": {
         const port = ensureHost();
         if (!port) {
-          sendResponse({ ok: false, error: "Не удалось подключиться к native host. Установите его (host/install_host.js)." });
+          sendResponse({
+            ok: false,
+            error: "Не удалось подключиться к native host. Установите его (host/install_host.js).",
+          });
           return;
         }
         // Honest round-trip: reply only after the host actually answers PONG

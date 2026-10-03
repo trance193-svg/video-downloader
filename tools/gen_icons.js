@@ -17,12 +17,16 @@ function crc32(buf) {
     c ^= buf[i];
     for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
   }
-  return (~c) >>> 0;
+  return ~c >>> 0;
 }
 
 function adler32(buf) {
-  let a = 1, b = 0;
-  for (let i = 0; i < buf.length; i++) { a = (a + buf[i]) % 65521; b = (b + a) % 65521; }
+  let a = 1,
+    b = 0;
+  for (let i = 0; i < buf.length; i++) {
+    a = (a + buf[i]) % 65521;
+    b = (b + a) % 65521;
+  }
   return ((b << 16) | a) >>> 0;
 }
 
@@ -70,8 +74,8 @@ function makePng(size, pixels) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
-  ihdr.writeUInt8(8, 8);  // bit depth
-  ihdr.writeUInt8(6, 9);  // color type RGBA
+  ihdr.writeUInt8(8, 8); // bit depth
+  ihdr.writeUInt8(6, 9); // color type RGBA
   ihdr.writeUInt8(0, 10);
   ihdr.writeUInt8(0, 11);
   ihdr.writeUInt8(0, 12);
@@ -103,8 +107,12 @@ function render(size) {
   const px = new Uint8Array(size * size * 4);
   const radius = Math.round(size * 0.18);
   // colors
-  const bgR = 217, bgG = 46, bgB = 46;     // red
-  const fgR = 255, fgG = 255, fgB = 255;    // white arrow
+  const bgR = 217,
+    bgG = 46,
+    bgB = 46; // red
+  const fgR = 255,
+    fgG = 255,
+    fgB = 255; // white arrow
 
   function setRGBA(x, y, r, g, b, a) {
     if (x < 0 || y < 0 || x >= size || y >= size) return;
@@ -121,7 +129,8 @@ function render(size) {
   // rounded square background
   function insideRounded(x, y) {
     // distance from nearest corner
-    let dx = 0, dy = 0;
+    let dx = 0,
+      dy = 0;
     if (x < radius) dx = radius - x;
     else if (x > size - 1 - radius) dx = x - (size - 1 - radius);
     if (y < radius) dy = radius - y;
@@ -140,7 +149,7 @@ function render(size) {
   const topY = size * 0.26;
   const botY = size * 0.72;
   const shaftW = size * 0.16;
-  const headW = size * 0.30;
+  const headW = size * 0.3;
   const headTopY = size * 0.54;
 
   function inArrow(x, y) {

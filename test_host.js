@@ -4,7 +4,11 @@ const { spawn } = require("child_process");
 const path = require("path");
 
 const bat = path.join(__dirname, "host", "run_host.bat");
-const p = spawn('"' + bat + '"', [], { stdio: ["pipe", "pipe", "pipe"], shell: true, windowsVerbatimArguments: true });
+const p = spawn('"' + bat + '"', [], {
+  stdio: ["pipe", "pipe", "pipe"],
+  shell: true,
+  windowsVerbatimArguments: true,
+});
 
 const msg = Buffer.from(JSON.stringify({ command: "PING" }));
 const len = Buffer.alloc(4);
@@ -12,9 +16,14 @@ len.writeUInt32LE(msg.length, 0);
 p.stdin.write(Buffer.concat([len, msg]));
 
 let out = Buffer.alloc(0);
-p.stdout.on("data", (d) => { out = Buffer.concat([out, d]); });
+p.stdout.on("data", (d) => {
+  out = Buffer.concat([out, d]);
+});
 p.stderr.on("data", (d) => process.stderr.write("STDERR: " + d + "\n"));
-p.on("error", (e) => { console.log("SPAWN ERROR:", e.message); process.exit(1); });
+p.on("error", (e) => {
+  console.log("SPAWN ERROR:", e.message);
+  process.exit(1);
+});
 
 setTimeout(() => {
   if (out.length >= 4) {

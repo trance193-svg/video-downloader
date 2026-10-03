@@ -175,10 +175,10 @@ function buildVideoList(info) {
 
   // Collect progressive (video+audio in one) and separate video-only formats.
   const progressive = formats.filter(
-    (f) => f.vcodec && f.vcodec !== "none" && f.acodec && f.acodec !== "none"
+    (f) => f.vcodec && f.vcodec !== "none" && f.acodec && f.acodec !== "none",
   );
   const videoOnly = formats.filter(
-    (f) => f.vcodec && f.vcodec !== "none" && (!f.acodec || f.acodec === "none")
+    (f) => f.vcodec && f.vcodec !== "none" && (!f.acodec || f.acodec === "none"),
   );
 
   // Helper: pick a human-readable label.
@@ -258,13 +258,16 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
   // extraction when the page title is missing.
   let baseName = "";
   if (pageTitle) {
-    baseName = pageTitle.trim().replace(/[\\/:*?"<>|]/g, "_").slice(0, 180);
+    baseName = pageTitle
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .slice(0, 180);
   }
   // Local time (not UTC) so the prefix matches what the user sees on the clock.
   const p2 = (n) => String(n).padStart(2, "0");
   const now = new Date();
   const stamp = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(
-    now.getDate()
+    now.getDate(),
   )}T${p2(now.getHours())}-${p2(now.getMinutes())}-${p2(now.getSeconds())}`;
   const nameTpl = baseName
     ? `${stamp} - ${baseName}.%(ext)s`
@@ -414,7 +417,8 @@ async function handle(msg) {
     if (!isValidUrl(msg.url)) {
       sendMessage({
         type: "ERROR",
-        message: "Некорректная ссылка: ожидается http(s):// URL, получено: " +
+        message:
+          "Некорректная ссылка: ожидается http(s):// URL, получено: " +
           String(msg.url).slice(0, 80),
       });
       return;
@@ -423,14 +427,17 @@ async function handle(msg) {
       // Replace the running job on purpose; its "close" handler will see the
       // intentional-kill flag and stay quiet.
       jobKilledIntentionally = true;
-      try { currentJob.proc.kill("SIGKILL"); } catch (_) {}
+      try {
+        currentJob.proc.kill("SIGKILL");
+      } catch (_) {}
       currentJob = null;
       sendMessage({
         type: "LOG",
         level: "info",
-        message: cmd === "LIST"
-          ? "Предыдущая задача прервана — выполняю анализ."
-          : "Предыдущая задача прервана — начинаю новое скачивание.",
+        message:
+          cmd === "LIST"
+            ? "Предыдущая задача прервана — выполняю анализ."
+            : "Предыдущая задача прервана — начинаю новое скачивание.",
       });
     }
   }

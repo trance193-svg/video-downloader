@@ -53,11 +53,18 @@ function setHost(status, cls) {
   els.hostStatus.className = "status " + (cls || "");
 }
 
-function show(el) { el.classList.remove("hidden"); }
-function hide(el) { el.classList.add("hidden"); }
+function show(el) {
+  el.classList.remove("hidden");
+}
+function hide(el) {
+  el.classList.add("hidden");
+}
 
 function setError(msg) {
-  if (!msg) { hide(els.errorBox); return; }
+  if (!msg) {
+    hide(els.errorBox);
+    return;
+  }
   els.errorText.textContent = msg;
   show(els.errorBox);
 }
@@ -206,7 +213,9 @@ async function analyse(url) {
 function renderListResult(result) {
   resetAnalyseBtn();
   if (!result || !result.videos || result.videos.length === 0) {
-    setError("Видео не найдено. Возможно, сайт не поддерживается yt-dlp напрямую — попробуйте проанализировать перехваченный поток выше.");
+    setError(
+      "Видео не найдено. Возможно, сайт не поддерживается yt-dlp напрямую — попробуйте проанализировать перехваченный поток выше.",
+    );
     hide(els.resultBox);
     return;
   }
@@ -276,9 +285,7 @@ function renderProgress(p) {
   show(els.progressBox);
   const pct = parseFloat(String(p.percent).replace("%", "").trim()) || 0;
   els.barFill.style.width = pct + "%";
-  els.progressText.textContent = [p.percent, p.speed, prettyEta(p.eta)]
-    .filter(Boolean)
-    .join(" · ");
+  els.progressText.textContent = [p.percent, p.speed, prettyEta(p.eta)].filter(Boolean).join(" · ");
 }
 
 function renderDone(d) {
@@ -299,7 +306,9 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
     case "HOST_DISCONNECTED":
       setHost("host: отключён", "err");
-      setError("Соединение с native host разорвано. Перезапустите браузер или переустановите хост.");
+      setError(
+        "Соединение с native host разорвано. Перезапустите браузер или переустановите хост.",
+      );
       break;
     case "LOG":
       // could surface as hint

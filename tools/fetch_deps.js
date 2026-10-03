@@ -63,7 +63,10 @@ async function downloadTo(url, dest) {
   const out = fs.createWriteStream(tmp);
   res.on("data", (d) => {
     got += d.length;
-    if (total) process.stdout.write(`\r  ${path.basename(dest)}: ${(got / 1048576).toFixed(1)}/${(total / 1048576).toFixed(1)} MB`);
+    if (total)
+      process.stdout.write(
+        `\r  ${path.basename(dest)}: ${(got / 1048576).toFixed(1)}/${(total / 1048576).toFixed(1)} MB`,
+      );
   });
   await new Promise((resolve, reject) => {
     res.pipe(out);
@@ -94,7 +97,10 @@ function extractFromZip(zipPath, entryName, destPath) {
   // Find central directory via EOCD signature 0x06054b50
   let eocd = -1;
   for (let i = buf.length - 22; i >= 0 && i > buf.length - 65557; i--) {
-    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
   }
   if (eocd < 0) throw new Error("EOCD not found in zip");
   const cdOffset = buf.readUInt32LE(eocd + 16);
@@ -186,7 +192,9 @@ async function fetchFfmpeg() {
         console.log("  Предупреждение: ffprobe.exe не извлечён (" + e.message + ")");
       }
     }
-    try { fs.unlinkSync(zipDest); } catch (_) {}
+    try {
+      fs.unlinkSync(zipDest);
+    } catch (_) {}
   } catch (e) {
     console.error("\n  Не удалось скачать ffmpeg автоматически: " + e.message);
     console.error("  Скачайте static build: https://www.gyan.dev/ffmpeg/builds/");

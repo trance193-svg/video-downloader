@@ -60,7 +60,12 @@
     // iframes — Vimeo embeds live here; the background will catch their
     // network requests anyway, but we surface the embed URL as a hint.
     document.querySelectorAll("iframe").forEach((f) => {
-      if (f.src && /player\.(vimeo|youtube)\.com|youtube\.com\/embed|dailymotion\.com\/embed|vk\.com\/video_ext|rutube\.ru\/play/i.test(f.src)) {
+      if (
+        f.src &&
+        /player\.(vimeo|youtube)\.com|youtube\.com\/embed|dailymotion\.com\/embed|vk\.com\/video_ext|rutube\.ru\/play/i.test(
+          f.src,
+        )
+      ) {
         report(f.src, "iframe.embed");
       }
     });

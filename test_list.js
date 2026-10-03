@@ -4,10 +4,17 @@ const { spawn } = require("child_process");
 const path = require("path");
 
 const url = process.argv[2];
-if (!url) { console.log("usage: node test_list.js <video-url>"); process.exit(1); }
+if (!url) {
+  console.log("usage: node test_list.js <video-url>");
+  process.exit(1);
+}
 
 const bat = path.join(__dirname, "host", "run_host.bat");
-const p = spawn('"' + bat + '"', [], { stdio: ["pipe", "pipe", "pipe"], shell: true, windowsVerbatimArguments: true });
+const p = spawn('"' + bat + '"', [], {
+  stdio: ["pipe", "pipe", "pipe"],
+  shell: true,
+  windowsVerbatimArguments: true,
+});
 
 function send(obj) {
   const msg = Buffer.from(JSON.stringify(obj));
@@ -19,7 +26,12 @@ function send(obj) {
 send({ command: "LIST", url, pageTitle: "test_list.js" });
 
 let out = Buffer.alloc(0);
-p.stdout.on("data", (d) => { out = Buffer.concat([out, d]); try { drain(); } catch (_) {} });
+p.stdout.on("data", (d) => {
+  out = Buffer.concat([out, d]);
+  try {
+    drain();
+  } catch (_) {}
+});
 p.stderr.on("data", (d) => process.stderr.write("STDERR: " + d));
 let done = false;
 function drain() {
@@ -43,4 +55,10 @@ function drain() {
     out = out.subarray(4 + n);
   }
 }
-setTimeout(() => { if (!done) { console.log("TIMEOUT: no LIST_RESULT in 60s, bytes:", out.length); p.kill(); process.exit(2); } }, 60000);
+setTimeout(() => {
+  if (!done) {
+    console.log("TIMEOUT: no LIST_RESULT in 60s, bytes:", out.length);
+    p.kill();
+    process.exit(2);
+  }
+}, 60000);
