@@ -1,0 +1,20 @@
+# Bundled binaries (~115 MB) — distributed via tools/fetch_deps.js or the installer,
+# never stored in git.
+host/bin/
+
+# Build artifacts
+dist/
+release/
+
+# Test artifacts
+test-shots/
+*.log
+
+# Editor / OS noise
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+
+# Node
+node_modules/

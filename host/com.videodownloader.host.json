@@ -1,0 +1,9 @@
+{
+  "name": "com.videodownloader.host",
+  "description": "Native host for Video Downloader browser extension (runs yt-dlp + ffmpeg)",
+  "path": "C:\\Разработка\\video-downloader\\host\\run_host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://igdndbbajddifheokdihdfijocbbcefd/"
+  ]
+}
