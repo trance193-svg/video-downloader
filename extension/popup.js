@@ -264,6 +264,7 @@ function renderListResult(result) {
 async function doDownload(v) {
   setError("");
   hide(els.doneBox);
+  cancelNoticed = false;
   els.barFill.style.width = "0%";
   els.progressText.textContent = "Запуск…";
   show(els.progressBox);
@@ -281,7 +282,13 @@ async function doDownload(v) {
   }
 }
 
+// Set when the user cancels: late PROGRESS broadcasts (already queued in the
+// port when the kill landed) must not re-open the progress bar over the
+// "Скачивание отменено" notice.
+let cancelNoticed = false;
+
 function renderProgress(p) {
+  if (cancelNoticed) return;
   show(els.progressBox);
   const pct = parseFloat(String(p.percent).replace("%", "").trim()) || 0;
   els.barFill.style.width = pct + "%";
@@ -290,6 +297,7 @@ function renderProgress(p) {
 
 function renderDone(d) {
   hide(els.progressBox);
+  cancelNoticed = false;
   els.doneText.textContent = "Готово! Файл сохранён: " + (d.path || "папка загрузок");
   els.doneText.classList.remove("neutral");
   show(els.doneBox);
@@ -332,6 +340,7 @@ chrome.runtime.onMessage.addListener((msg) => {
       // Cancellation is intentional — surface it as a normal notice, not as
       // an error, and keep it visible (writing into a hidden element would
       // give the user no feedback at all).
+      cancelNoticed = true;
       hide(els.progressBox);
       els.doneText.textContent = "Скачивание отменено.";
       els.doneText.classList.add("neutral");
