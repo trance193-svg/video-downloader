@@ -21,7 +21,10 @@
 //   { type: "PROGRESS", percent, speed, eta, title }
 //   { type: "DONE", path }
 //   { type: "ERROR", message }
-//   { type: "KILLED" }
+//   { type: "KILLED" }           — current job was cancelled/replaced
+//
+// When the browser closes stdin while a job runs, the job is allowed to
+// finish (the file is kept) and the host exits afterwards.
 // ===========================================================================
 
 const { spawn } = require("child_process");
@@ -43,7 +46,7 @@ function resolveExe(name) {
 }
 const YT_DLP = resolveExe("yt-dlp");
 const FFMPEG = resolveExe("ffmpeg");
-const HOST_VERSION = "1.0.0";
+const HOST_VERSION = "1.1.0";
 
 // Optional simple logging to a file for debugging (not required for operation).
 const LOG_FILE = process.env.VD_LOG ? path.join(__dirname, "host.log") : null;
@@ -84,24 +87,38 @@ function readMessages(handler) {
       }
     }
   });
-  process.stdin.on("end", () => process.exit(0));
+  // NOTE: no exit-on-end here — the bootstrap section owns stdin-close
+  // behavior so a running download can finish instead of being killed.
 }
 
 // ---------------------------------------------------------------------------
 // Job control.
 // ---------------------------------------------------------------------------
 let currentJob = null; // { proc, kind }
+// Set while we SIGKILL a job on purpose (user cancel, or a new command
+// replacing it). The process "close" handler checks this to avoid reporting
+// an intentional kill as a mysterious "exited with code null" error.
+let jobKilledIntentionally = false;
+// Set when the browser side closed our stdin (port death / popup gone).
+let stdinClosed = false;
 
 function killCurrentJob() {
   if (!currentJob || !currentJob.proc) {
     sendMessage({ type: "KILLED" });
     return;
   }
+  jobKilledIntentionally = true;
   try {
     currentJob.proc.kill("SIGKILL");
   } catch (_) {}
   currentJob = null;
   sendMessage({ type: "KILLED" });
+}
+
+// After any job ends: if the browser already closed our stdin, there is no
+// one to talk to — exit instead of lingering as an orphan process.
+function maybeExitAfterJob() {
+  if (stdinClosed) process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -112,13 +129,9 @@ function killCurrentJob() {
 // ---------------------------------------------------------------------------
 function listFormats(url, pageUrl) {
   return new Promise((resolve) => {
-    const args = [
-      "-J",
-      "--no-playlist",
-      "--no-warnings",
-      "--no-check-certificates",
-      url,
-    ];
+    const args = ["-J", "--no-playlist", "--no-warnings"];
+    if (pageUrl) args.push("--referer", pageUrl);
+    args.push(url);
     const proc = spawn(YT_DLP, args, { windowsHide: true });
     currentJob = { proc, kind: "LIST" };
     let outBuf = Buffer.alloc(0);
@@ -247,7 +260,12 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
   if (pageTitle) {
     baseName = pageTitle.trim().replace(/[\\/:*?"<>|]/g, "_").slice(0, 180);
   }
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  // Local time (not UTC) so the prefix matches what the user sees on the clock.
+  const p2 = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(
+    now.getDate()
+  )}T${p2(now.getHours())}-${p2(now.getMinutes())}-${p2(now.getSeconds())}`;
   const nameTpl = baseName
     ? `${stamp} - ${baseName}.%(ext)s`
     : `${stamp} - %(title).200B [%(id)s].%(ext)s`;
@@ -260,19 +278,30 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
     "--no-overwrites",
     "--concurrent-fragments",
     "4",
+    // Keep .part files: a cancelled/killed download then leaves a clearly
+    // incomplete *.part instead of a truncated file that looks finished.
     "-o",
     path.join(dir, nameTpl),
     "--no-playlist",
-    "--no-part",
     "--newline",
+    // Keep --progress explicitly: --print implies --quiet otherwise and our
+    // PROGRESS lines would disappear.
+    "--progress",
+    "--print",
+    "after_move:FINAL_PATH %(filepath)s",
     "--progress-template",
     "PROGRESS %(progress._percent_str)s %(progress._speed_str)s %(progress._eta_str)s",
-    url,
   ];
+  if (pageUrl) args.push("--referer", pageUrl);
+  args.push(url);
 
   const proc = spawn(YT_DLP, args, { windowsHide: true });
   currentJob = { proc, kind: "DOWNLOAD" };
   let stderrBuf = "";
+  let finalPath = null;
+  // yt-dlp emits PROGRESS lines as a \r-separated stream; chunks can split a
+  // line in half, so accumulate and only parse complete lines.
+  let lineBuf = "";
 
   proc.stderr.on("data", (d) => {
     // stderr is warnings/errors only; accumulate for error reporting.
@@ -280,9 +309,15 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
   });
 
   proc.stdout.on("data", (d) => {
-    const text = d.toString("utf8");
-    // yt-dlp writes PROGRESS template lines and [download] Destination: to stdout.
-    for (const line of text.split(/\r?\n/)) {
+    lineBuf += d.toString("utf8");
+    const lines = lineBuf.split(/\r?\n/);
+    lineBuf = lines.pop(); // keep the incomplete tail buffered
+    for (const line of lines) {
+      const fp = line.match(/^FINAL_PATH\s+(.+)\s*$/);
+      if (fp) {
+        finalPath = fp[1].trim();
+        continue;
+      }
       const m = line.match(/PROGRESS\s+(\S+)\s+(\S+)\s+(\S+)/);
       if (m) {
         sendMessage({
@@ -304,18 +339,26 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle) {
   });
 
   proc.on("close", (code) => {
+    const killedOnPurpose = jobKilledIntentionally;
+    jobKilledIntentionally = false;
     currentJob = null;
+    if (killedOnPurpose) {
+      // User cancel or replaced by a newer command — KILLED is sent by the
+      // killer; nothing to report here.
+      maybeExitAfterJob();
+      return;
+    }
     if (code === 0) {
-      // Try to recover the final file path from yt-dlp's stdout/Last line.
-      // Easiest robust approach: scan the output dir for the newest file.
-      const finalPath = findNewestFile(dir);
-      sendMessage({ type: "DONE", path: finalPath || dir });
+      // Prefer the exact path yt-dlp reported; fall back to a directory scan.
+      const final = finalPath || findNewestFile(dir);
+      sendMessage({ type: "DONE", path: final || dir });
     } else {
       sendMessage({
         type: "ERROR",
         message: trim(stderrBuf) || "yt-dlp завершился с кодом " + code,
       });
     }
+    maybeExitAfterJob();
   });
 }
 
@@ -343,6 +386,13 @@ function trim(s) {
   return (s || "").trim().replace(/\s+/g, " ").slice(-2000);
 }
 
+// Only http(s) URLs are meaningful to yt-dlp; anything else (media-source://
+// junk, "javascript:", "-flag-looking" strings that yt-dlp would parse as
+// options) is rejected before it reaches the command line.
+function isValidUrl(u) {
+  return typeof u === "string" && /^https?:\/\/\S+/i.test(u) && !u.startsWith("-");
+}
+
 // ---------------------------------------------------------------------------
 // Command dispatcher.
 // ---------------------------------------------------------------------------
@@ -360,27 +410,46 @@ async function handle(msg) {
     return;
   }
 
-  if (cmd === "LIST") {
+  if (cmd === "LIST" || cmd === "DOWNLOAD") {
+    if (!isValidUrl(msg.url)) {
+      sendMessage({
+        type: "ERROR",
+        message: "Некорректная ссылка: ожидается http(s):// URL, получено: " +
+          String(msg.url).slice(0, 80),
+      });
+      return;
+    }
     if (currentJob) {
+      // Replace the running job on purpose; its "close" handler will see the
+      // intentional-kill flag and stay quiet.
+      jobKilledIntentionally = true;
       try { currentJob.proc.kill("SIGKILL"); } catch (_) {}
       currentJob = null;
+      sendMessage({
+        type: "LOG",
+        level: "info",
+        message: cmd === "LIST"
+          ? "Предыдущая задача прервана — выполняю анализ."
+          : "Предыдущая задача прервана — начинаю новое скачивание.",
+      });
     }
+  }
+
+  if (cmd === "LIST") {
     sendMessage({ type: "LOG", level: "info", message: "Анализирую ссылку…" });
     const res = await listFormats(msg.url, msg.pageUrl);
     if (res.error) {
       sendMessage({ type: "ERROR", message: res.error });
+      maybeExitAfterJob();
       return;
     }
     const list = buildVideoList(res.info);
     sendMessage({ type: "LIST_RESULT", ...list });
+    maybeExitAfterJob();
     return;
   }
 
   if (cmd === "DOWNLOAD") {
-    if (currentJob) {
-      try { currentJob.proc.kill("SIGKILL"); } catch (_) {}
-      currentJob = null;
-    }
     sendMessage({
       type: "LOG",
       level: "info",
@@ -399,5 +468,11 @@ async function handle(msg) {
 readMessages(handle);
 logToFile("Host started. YT_DLP=" + YT_DLP + " FFMPEG=" + FFMPEG);
 
-// If stdin is closed immediately (e.g. test run from shell), exit cleanly.
-process.stdin.on("end", () => process.exit(0));
+// When the browser closes the port (service worker death, popup gone) stdin
+// ends. If a job is running we let it finish — killing it would silently
+// lose the user's download; maybeExitAfterJob() exits once it completes.
+process.stdin.on("end", () => {
+  stdinClosed = true;
+  logToFile("stdin closed by browser");
+  if (!currentJob) process.exit(0);
+});

@@ -22,7 +22,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
 const { spawnSync } = require("child_process");
 
 const HOST_NAME = "com.videodownloader.host";

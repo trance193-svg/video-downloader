@@ -23,10 +23,11 @@ const MEDIA_RE = /\.(m3u8|mpd|mp4|webm|m4v|ts|mov|mkv|flv|avi|m4a|mp3|ogg)(\?|$)
 // These look like HLS/DASH manifests specifically.
 const PLAYLIST_RE = /\.(m3u8|mpd)(\?|$)/i;
 
-// In-memory + session-storage map: tabId -> array of detected streams.
-// Each stream: { url, type: "playlist"|"media", ts, contentType, frameUrl }
+// Native messaging port to the local host. Spawned lazily by ensureHost().
 let hostPort = null;
-let pendingPopupCallbacks = {};
+
+// Resolver for the PING_HOST round-trip (see pingHostWithTimeout below).
+let pingWaiter = null;
 
 // ---------------------------------------------------------------------------
 // Stream detection via webRequest (observer only).
@@ -72,7 +73,9 @@ async function addStreamToTab(tabId, stream) {
   const media = list
     .filter((s) => s.type !== "playlist")
     .filter((s) => /\.(mp4|webm|mkv|mov|flv|avi)/i.test(s.url));
-  const kept = [...playlists, ...media.slice(-50)];
+  // Cap playlists too — some sites emit a unique manifest URL per quality or
+  // per expiring token, which would otherwise grow without bound.
+  const kept = [...playlists.slice(-20), ...media.slice(-50)];
   await chrome.storage.session.set({ [key]: kept });
 }
 
@@ -83,7 +86,7 @@ async function updateBadge(tabId) {
     const list = data[key] || [];
     // Count only "interesting" streams (manifests + direct media), not every .ts.
     const count = list.filter(
-      (s) => s.type === "playlist" || /\.(mp4|webm|mkv|mov|mkv|flv|avi)/i.test(s.url)
+      (s) => s.type === "playlist" || /\.(mp4|webm|mkv|mov|flv|avi)/i.test(s.url)
     ).length;
     const text = count > 0 ? String(count) : "";
     await chrome.action.setBadgeText({ tabId, text });
@@ -96,13 +99,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.session.remove("tab_" + tabId).catch(() => {});
 });
 
-// Reset detection on navigation to a new document.
+// Reset detection on navigation to a new document. Update the badge only
+// after the stored list is actually gone, otherwise it can read stale data.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === "loading") {
-    chrome.storage.session.remove("tab_" + tabId).catch(() => {
-      updateBadge(tabId);
-    });
-    updateBadge(tabId);
+    chrome.storage.session
+      .remove("tab_" + tabId)
+      .then(() => updateBadge(tabId))
+      .catch(() => {});
   }
 });
 
@@ -126,12 +130,23 @@ function ensureHost() {
   hostPort.onDisconnect.addListener(() => {
     hostPort = null;
     stopKeepAlive();
+    // Resolve a pending PING as failed so the popup doesn't hang for the
+    // full timeout when the host process dies immediately.
+    if (pingWaiter) {
+      pingWaiter({ ok: false, error: "host отключился сразу после запуска" });
+      pingWaiter = null;
+    }
     // Notify popup if open.
     broadcastToPopups({ type: "HOST_DISCONNECTED" });
   });
   return hostPort;
 }
 
+// ---------------------------------------------------------------------------
+// UI state (last analysis result / progress / error) — mirrored into
+// chrome.storage.session so a freshly restarted service worker can answer
+// GET_STATE with the previous job's outcome instead of an empty screen.
+// ---------------------------------------------------------------------------
 let lastListResult = null; // { title, thumb, videos, source }
 let lastListResultUrl = null; // URL that produced lastListResult (so download uses it after popup reopen)
 let lastProgress = null;
@@ -139,13 +154,55 @@ let lastLog = null;
 let lastError = null;
 let lastDone = null;
 
+const UI_STATE_KEYS = [
+  "lastListResult",
+  "lastListResultUrl",
+  "lastProgress",
+  "lastLog",
+  "lastError",
+  "lastDone",
+];
+let uiStateLoaded = null;
+
+function loadUiState() {
+  if (!uiStateLoaded) {
+    uiStateLoaded = (async () => {
+      try {
+        const data = await chrome.storage.session.get(
+          UI_STATE_KEYS.map((k) => "ui_" + k)
+        );
+        for (const k of UI_STATE_KEYS) {
+          const v = data["ui_" + k];
+          if (v === undefined) continue;
+          if (k === "lastListResult") lastListResult = v;
+          else if (k === "lastListResultUrl") lastListResultUrl = v;
+          else if (k === "lastProgress") lastProgress = v;
+          else if (k === "lastLog") lastLog = v;
+          else if (k === "lastError") lastError = v;
+          else if (k === "lastDone") lastDone = v;
+        }
+      } catch (_) {}
+    })();
+  }
+  return uiStateLoaded;
+}
+
+function saveUiState(key, value) {
+  chrome.storage.session.set({ ["ui_" + key]: value }).catch(() => {});
+}
+
 function handleHostMessage(msg) {
   switch (msg.type) {
     case "PONG":
+      if (pingWaiter) {
+        pingWaiter({ ok: true, version: msg.version });
+        pingWaiter = null;
+      }
       broadcastToPopups({ type: "PONG", version: msg.version });
       break;
     case "LOG":
       lastLog = msg;
+      saveUiState("lastLog", msg);
       // "Начинаю скачивание…" / "Анализирую ссылку…" from the host marks the
       // start of a long-running job — arm the keep-alive so the SW survives.
       if (msg.level === "info") startKeepAlive();
@@ -153,19 +210,23 @@ function handleHostMessage(msg) {
       break;
     case "LIST_RESULT":
       lastListResult = msg;
+      saveUiState("lastListResult", msg);
       broadcastToPopups({ type: "LIST_RESULT", title: msg.title, thumb: msg.thumb, videos: msg.videos, url: lastListResultUrl });
       break;
     case "PROGRESS":
       lastProgress = msg;
+      saveUiState("lastProgress", msg);
       broadcastToPopups({ type: "PROGRESS", percent: msg.percent, speed: msg.speed, eta: msg.eta });
       break;
     case "DONE":
       lastDone = msg;
+      saveUiState("lastDone", msg);
       stopKeepAlive();
       broadcastToPopups({ type: "DONE", path: msg.path });
       break;
     case "ERROR":
       lastError = msg;
+      saveUiState("lastError", msg);
       stopKeepAlive();
       broadcastToPopups({ type: "ERROR", message: msg.message });
       break;
@@ -203,11 +264,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ ok: false, error: "Не удалось подключиться к native host. Установите его (host/install_host.js)." });
           return;
         }
-        port.postMessage({ command: "PING" });
-        sendResponse({ ok: true });
+        // Honest round-trip: reply only after the host actually answers PONG
+        // (or on timeout/disconnect). connectNative() alone does not fail
+        // synchronously when the host is missing — the error arrives via
+        // onDisconnect, which resolves the waiter below.
+        const result = await new Promise((resolve) => {
+          pingWaiter = resolve;
+          port.postMessage({ command: "PING" });
+          setTimeout(() => {
+            if (pingWaiter === resolve) {
+              pingWaiter = null;
+              resolve({ ok: false, error: "host не отвечает (не установлен или не запускается)" });
+            }
+          }, 3000);
+        });
+        sendResponse(result);
         return;
       }
       case "GET_STATE": {
+        await loadUiState();
         const tab = await getActiveTab();
         const streams = tab ? await getStreams(tab.id) : [];
         sendResponse({
@@ -233,6 +308,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         lastError = null;
         lastListResult = null;
         lastListResultUrl = msg.url;
+        saveUiState("lastError", null);
+        saveUiState("lastListResult", null);
+        saveUiState("lastListResultUrl", msg.url);
         port.postMessage({
           command: "LIST",
           url: msg.url,
@@ -250,6 +328,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         lastError = null;
         lastDone = null;
         lastProgress = null;
+        saveUiState("lastError", null);
+        saveUiState("lastDone", null);
+        saveUiState("lastProgress", null);
         port.postMessage({
           command: "DOWNLOAD",
           url: msg.url,
@@ -264,13 +345,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "KILL": {
         const port = ensureHost();
         if (port) port.postMessage({ command: "KILL" });
-        sendResponse({ ok: true });
-        return;
-      }
-      case "OPEN_DETECTED": {
-        // Open a detected stream URL in a new tab so yt-dlp can grab it from
-        // the page (sometimes useful), or for manual inspection.
-        chrome.tabs.create({ url: msg.url });
         sendResponse({ ok: true });
         return;
       }
@@ -308,7 +382,8 @@ let _keepAliveRunning = false;
 function startKeepAlive() {
   if (_keepAliveRunning) return;
   _keepAliveRunning = true;
-  chrome.alarms.create("swKeepAlive", { periodInMinutes: 20 / 60 });
+  // Chrome clamps alarm periods below 30 s up to 30 s — ask for 30 s directly.
+  chrome.alarms.create("swKeepAlive", { periodInMinutes: 0.5 });
 }
 
 function stopKeepAlive() {

@@ -22,7 +22,6 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const { execSync } = require("child_process");
 
 const HERE = path.join(__dirname, "..", "host");
 const BIN = path.join(HERE, "bin");
@@ -56,40 +55,32 @@ function httpGet(url, { headers = {}, redirects = 0 } = {}) {
   });
 }
 
-function downloadTo(url, dest) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const res = await httpGet(url);
-      const total = parseInt(res.headers["content-length"] || "0", 10);
-      let got = 0;
-      const tmp = dest + ".part";
-      const out = fs.createWriteStream(tmp);
-      res.on("data", (d) => {
-        got += d.length;
-        if (total) process.stdout.write(`\r  ${path.basename(dest)}: ${(got / 1048576).toFixed(1)}/${(total / 1048576).toFixed(1)} MB`);
-      });
-      res.pipe(out);
-      out.on("finish", () => {
-        out.close(() => {
-          fs.renameSync(tmp, dest);
-          process.stdout.write("\n");
-          resolve(dest);
-        });
-      });
-      out.on("error", reject);
-    } catch (e) { reject(e); }
+async function downloadTo(url, dest) {
+  const res = await httpGet(url);
+  const total = parseInt(res.headers["content-length"] || "0", 10);
+  let got = 0;
+  const tmp = dest + ".part";
+  const out = fs.createWriteStream(tmp);
+  res.on("data", (d) => {
+    got += d.length;
+    if (total) process.stdout.write(`\r  ${path.basename(dest)}: ${(got / 1048576).toFixed(1)}/${(total / 1048576).toFixed(1)} MB`);
   });
+  await new Promise((resolve, reject) => {
+    res.pipe(out);
+    out.on("finish", resolve);
+    out.on("error", reject);
+    res.on("error", reject);
+  });
+  fs.renameSync(tmp, dest);
+  process.stdout.write("\n");
+  return dest;
 }
 
-function getJSON(url) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const res = await httpGet(url, { headers: { Accept: "application/vnd.github+json" } });
-      let data = "";
-      for await (const chunk of res) data += chunk;
-      resolve(JSON.parse(data));
-    } catch (e) { reject(e); }
-  });
+async function getJSON(url) {
+  const res = await httpGet(url, { headers: { Accept: "application/vnd.github+json" } });
+  let data = "";
+  for await (const chunk of res) data += chunk;
+  return JSON.parse(data);
 }
 
 // --- Minimal ZIP reader (stored + deflate) for extracting ffmpeg.exe ----
@@ -161,29 +152,46 @@ async function fetchYtDlp() {
 }
 
 async function fetchFfmpeg() {
-  const dest = path.join(BIN, "ffmpeg.exe");
-  if (fs.existsSync(dest) && fs.statSync(dest).size > 1000000) {
-    console.log("ffmpeg.exe уже есть, пропускаю. (удалите, чтобы обновить)");
+  // yt-dlp uses ffprobe for metadata (duration, exact size); without it every
+  // run prints "Unable to extract metadata: ffprobe not found". The gyan.dev
+  // essentials zip ships both exes, so fetch once and extract what's missing.
+  const ffmpegDest = path.join(BIN, "ffmpeg.exe");
+  const ffprobeDest = path.join(BIN, "ffprobe.exe");
+  const haveFfmpeg = fs.existsSync(ffmpegDest) && fs.statSync(ffmpegDest).size > 1000000;
+  const haveFfprobe = fs.existsSync(ffprobeDest) && fs.statSync(ffprobeDest).size > 1000000;
+  if (haveFfmpeg && haveFfprobe) {
+    console.log("ffmpeg.exe и ffprobe.exe уже есть, пропускаю. (удалите, чтобы обновить)");
     return;
   }
-  console.log("\n[2/2] Скачиваю ffmpeg (static build)…");
+  console.log("\n[2/2] Скачиваю ffmpeg (+ ffprobe, static build)…");
   // gyan.dev essentials static build. We fetch the latest "ffmpeg-release-essentials.zip".
   try {
     const zipDest = path.join(BIN, "_ffmpeg.zip");
     await downloadTo("https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip", zipDest);
-    console.log("  Распаковываю ffmpeg.exe из архива…");
-    try {
-      extractFromZip(zipDest, "ffmpeg.exe", dest);
-      console.log("  -> " + dest);
-    } catch (e) {
-      throw new Error("не удалось извлечь ffmpeg.exe из zip: " + e.message);
+    if (!haveFfmpeg) {
+      console.log("  Распаковываю ffmpeg.exe из архива…");
+      try {
+        extractFromZip(zipDest, "ffmpeg.exe", ffmpegDest);
+        console.log("  -> " + ffmpegDest);
+      } catch (e) {
+        throw new Error("не удалось извлечь ffmpeg.exe из zip: " + e.message);
+      }
+    }
+    if (!haveFfprobe) {
+      try {
+        extractFromZip(zipDest, "ffprobe.exe", ffprobeDest);
+        console.log("  -> " + ffprobeDest);
+      } catch (e) {
+        // ffprobe is nice-to-have; ffmpeg alone is enough to download+merge.
+        console.log("  Предупреждение: ffprobe.exe не извлечён (" + e.message + ")");
+      }
     }
     try { fs.unlinkSync(zipDest); } catch (_) {}
   } catch (e) {
     console.error("\n  Не удалось скачать ffmpeg автоматически: " + e.message);
     console.error("  Скачайте static build: https://www.gyan.dev/ffmpeg/builds/");
     console.error("  (ffmpeg-release-essentials.zip), распакуйте и положите");
-    console.error("  ffmpeg.exe в: " + BIN);
+    console.error("  ffmpeg.exe и ffprobe.exe в: " + BIN);
   }
 }
 
@@ -195,8 +203,10 @@ async function fetchFfmpeg() {
   console.log("\n=== Готово ===");
   const ytd = fs.existsSync(path.join(BIN, "yt-dlp.exe"));
   const ff = fs.existsSync(path.join(BIN, "ffmpeg.exe"));
-  console.log("yt-dlp.exe: " + (ytd ? "OK" : "ОТСУТСТВУЕТ"));
-  console.log("ffmpeg.exe: " + (ff ? "OK" : "ОТСУТСТВУЕТ"));
+  const fp = fs.existsSync(path.join(BIN, "ffprobe.exe"));
+  console.log("yt-dlp.exe:  " + (ytd ? "OK" : "ОТСУТСТВУЕТ"));
+  console.log("ffmpeg.exe:  " + (ff ? "OK" : "ОТСУТСТВУЕТ"));
+  console.log("ffprobe.exe: " + (fp ? "OK" : "нет (метаданные будут неполными)"));
   if (!ytd || !ff) {
     console.log("\nНе все бинарники на месте — см. инструкции выше.");
   }

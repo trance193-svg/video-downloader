@@ -1,0 +1,17 @@
+{
+  "name": "video-downloader",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome MV3 extension + native messaging host that downloads videos via yt-dlp/ffmpeg",
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:smoke": "node test_host.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.0.0"
+  }
+}

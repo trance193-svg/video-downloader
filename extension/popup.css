@@ -168,6 +168,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .progress-text { color: var(--muted); font-size: 11px; }
 
 .done-text { color: var(--ok); font-size: 12px; word-break: break-word; }
+.done-text.neutral { color: var(--muted); }
 .error-text { color: var(--accent-2); font-size: 12px; word-break: break-word; line-height: 1.4; }
 
 footer { padding: 8px 12px; }

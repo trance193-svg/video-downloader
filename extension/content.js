@@ -6,14 +6,21 @@
 // and reports them to the background worker so they show up in the popup
 // alongside the streams caught by webRequest.
 //
-// Also patches HTMLMediaElement.prototype to capture src assignments made
-// in JS (many custom players set video.src programmatically rather than in
-// the markup) — this catches Vimeo's player.vimeo.com URLs, blob: URLs, etc.
+// NOTE: this script intentionally does NOT patch HTMLMediaElement. Content
+// scripts run in an isolated world, so redefining prototype properties here
+// only intercepts assignments made by the content script itself — page JS
+// (custom players setting video.src, blob: URLs) is unaffected. Real stream
+// URLs are captured by the background worker's webRequest observer anyway.
+//
+// PERFORMANCE: MutationObserver callbacks are debounced and the periodic
+// rescan is short — a full querySelectorAll sweep on every DOM mutation
+// would burn CPU on heavy SPA pages.
 // ===========================================================================
 
 (function () {
   "use strict";
 
+  // Keep in sync with MEDIA_RE in background.js.
   const MEDIA_EXT_RE = /\.(m3u8|mpd|mp4|webm|m4v|ts|mov|mkv|flv|avi|m4a|mp3|ogg)(\?|$)/i;
 
   function report(url, source) {
@@ -21,15 +28,16 @@
     // Skip data: URIs that are tiny — not downloadable streams.
     if (url.startsWith("data:") && url.length < 1024) return;
     try {
-      chrome.runtime.sendMessage({
+      const p = chrome.runtime.sendMessage({
         type: "CONTENT_FOUND",
         url,
         source,
         pageUrl: location.href,
         frameUrl: location.href,
       });
+      if (p && p.catch) p.catch(() => {}); // service worker may be asleep
     } catch (_) {
-      // service worker may be asleep; ignore.
+      // extension context gone (e.g. after update) — ignore.
     }
   }
 
@@ -67,55 +75,23 @@
     });
   }
 
-  // --- Patch HTMLMediaElement to catch JS-set src / blob URLs ---------
-  const proto = window.HTMLMediaElement && window.HTMLMediaElement.prototype;
-  if (proto) {
-    const desc = Object.getOwnPropertyDescriptor(proto, "src");
-    try {
-      Object.defineProperty(proto, "src", {
-        configurable: true,
-        enumerable: desc ? desc.enumerable : true,
-        get: desc ? desc.get : function () { return this.getAttribute("src"); },
-        set: function (v) {
-          if (typeof v === "string" && v && !v.startsWith("blob:")) {
-            report(v, "mediaElement.src.set");
-          } else if (typeof v === "string" && v.startsWith("blob:")) {
-            // blob: URLs aren't directly downloadable, but record them so
-            // the user sees *something* was detected. Real stream URL is
-            // usually caught by webRequest on the underlying requests.
-            report(v, "mediaElement.blob");
-          }
-          if (desc && desc.set) desc.set.call(this, v);
-          else this.setAttribute("src", v);
-        },
-      });
-    } catch (_) {}
-
-    // Also capture load() calls with an argument-less approach: patch
-    // srcObject for MediaSource usage.
-    const srcObjDesc = Object.getOwnPropertyDescriptor(proto, "srcObject");
-    if (srcObjDesc) {
-      try {
-        Object.defineProperty(proto, "srcObject", {
-          configurable: true,
-          enumerable: srcObjDesc.enumerable,
-          get: srcObjDesc.get,
-          set: function (v) {
-            if (v) report("media-source://" + (location.href), "mediaElement.srcObject");
-            srcObjDesc.set.call(this, v);
-          },
-        });
-      } catch (_) {}
-    }
-  }
-
   // --- Listen for dynamically inserted video elements ----------------
-  const obs = new MutationObserver(() => scanDOM());
+  // Debounce: coalesce bursts of mutations (SPA renders mutate the DOM
+  // hundreds of times) into one scan per 500 ms window.
+  let scanTimer = 0;
+  function scheduleScan() {
+    if (scanTimer) return;
+    scanTimer = setTimeout(() => {
+      scanTimer = 0;
+      scanDOM();
+    }, 500);
+  }
+  const obs = new MutationObserver(scheduleScan);
   try {
     obs.observe(document.documentElement, { childList: true, subtree: true });
   } catch (_) {}
 
-  // Run scans: immediately, after idle, and periodically for lazy players.
+  // Run scans: immediately, after idle, then periodically for lazy players.
   scanDOM();
   setTimeout(scanDOM, 1500);
   setTimeout(scanDOM, 4000);

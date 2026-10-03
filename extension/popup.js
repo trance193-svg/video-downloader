@@ -39,7 +39,6 @@ const els = {
 let currentPageUrl = "";
 let currentPageTitle = ""; // active tab <title> — used as the download filename
 let currentAnalysedUrl = ""; // the URL actually passed to yt-dlp (may differ from page URL)
-let currentStreamUrls = []; // detected streams for "try as URL" fallback
 let currentMasterUrl = ""; // master m3u8 if detected — preferred over page URL
 
 // ---------------------------------------------------------------------------
@@ -61,6 +60,18 @@ function setError(msg) {
   if (!msg) { hide(els.errorBox); return; }
   els.errorText.textContent = msg;
   show(els.errorBox);
+}
+
+function resetAnalyseBtn() {
+  els.analyseBtn.disabled = false;
+  els.analyseBtn.textContent = "Найти видео (yt-dlp)";
+}
+
+// yt-dlp reports "Unknown"/"NA" when it can't estimate — don't show that.
+function prettyEta(eta) {
+  const e = String(eta || "").trim();
+  if (!e || /^(unknown|na|n\/a)$/i.test(e)) return "";
+  return "осталось " + e;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,22 +117,22 @@ function renderDetected(streams) {
     e.className = "empty";
     e.textContent = "Пока ничего не перехвачено. Запустите воспроизведение видео на странице.";
     els.detectedList.appendChild(e);
-    currentStreamUrls = [];
     return;
   }
   // Dedupe and prefer manifests first; masters above sub-playlists.
+  // media-source:// is a fake scheme this extension used to report for
+  // MediaStream sources — it is not a downloadable URL, so drop it along
+  // with blob:/data:.
   const seen = new Set();
   const ordered = streams
-    .filter((s) => !s.url.startsWith("blob:") && !s.url.startsWith("data:"))
+    .filter((s) => !/^(blob:|data:|media-source:)/i.test(s.url))
     .sort((a, b) => {
       const rank = (s) => (s.master ? 0 : s.type === "playlist" ? 1 : 2);
       return rank(a) - rank(b);
     });
-  currentStreamUrls = [];
   for (const s of ordered) {
     if (seen.has(s.url)) continue;
     seen.add(s.url);
-    currentStreamUrls.push(s.url);
 
     const item = document.createElement("div");
     item.className = "detected-item";
@@ -178,16 +189,14 @@ async function analyse(url) {
   const target = url || currentPageUrl;
   if (!target) {
     setError("Нет активной вкладки с URL.");
-    els.analyseBtn.disabled = false;
-    els.analyseBtn.textContent = "Найти видео (yt-dlp)";
+    resetAnalyseBtn();
     return;
   }
   currentAnalysedUrl = target;
   const resp = await send({ type: "ANALYSE_URL", url: target, pageUrl: currentPageUrl });
   if (!resp.ok) {
     setError(resp.error || "Не удалось запустить анализ.");
-    els.analyseBtn.disabled = false;
-    els.analyseBtn.textContent = "Найти видео (yt-dlp)";
+    resetAnalyseBtn();
   }
 }
 
@@ -195,8 +204,7 @@ async function analyse(url) {
 // Render yt-dlp format list.
 // ---------------------------------------------------------------------------
 function renderListResult(result) {
-  els.analyseBtn.disabled = false;
-  els.analyseBtn.textContent = "Найти видео (yt-dlp)";
+  resetAnalyseBtn();
   if (!result || !result.videos || result.videos.length === 0) {
     setError("Видео не найдено. Возможно, сайт не поддерживается yt-dlp напрямую — попробуйте проанализировать перехваченный поток выше.");
     hide(els.resultBox);
@@ -268,12 +276,15 @@ function renderProgress(p) {
   show(els.progressBox);
   const pct = parseFloat(String(p.percent).replace("%", "").trim()) || 0;
   els.barFill.style.width = pct + "%";
-  els.progressText.textContent = `${p.percent || ""} · ${p.speed || ""} · осталось ${p.eta || ""}`;
+  els.progressText.textContent = [p.percent, p.speed, prettyEta(p.eta)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function renderDone(d) {
   hide(els.progressBox);
   els.doneText.textContent = "Готово! Файл сохранён: " + (d.path || "папка загрузок");
+  els.doneText.classList.remove("neutral");
   show(els.doneBox);
 }
 
@@ -305,13 +316,17 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
     case "ERROR":
       setError(msg.message);
-      els.analyseBtn.disabled = false;
-      els.analyseBtn.textContent = "Найти видео (yt-dlp)";
+      resetAnalyseBtn();
       hide(els.progressBox);
       break;
     case "KILLED":
+      // Cancellation is intentional — surface it as a normal notice, not as
+      // an error, and keep it visible (writing into a hidden element would
+      // give the user no feedback at all).
       hide(els.progressBox);
-      els.progressText.textContent = "Отменено";
+      els.doneText.textContent = "Скачивание отменено.";
+      els.doneText.classList.add("neutral");
+      show(els.doneBox);
       break;
   }
 });
