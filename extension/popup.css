@@ -62,7 +62,8 @@ header {
 .detected,
 .progress,
 .done,
-.error {
+.error,
+.setup {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -70,8 +71,30 @@ header {
 .detected,
 .progress,
 .done,
-.error {
+.error,
+.setup {
   border-top: none;
+}
+
+/* First-run setup wizard (visible only while the host is unreachable). */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.setup-title {
+  font-weight: 700;
+  font-size: 13px;
+}
+.setup-text {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.setup-step {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
 }
 
 .row {

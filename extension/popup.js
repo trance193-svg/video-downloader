@@ -40,7 +40,17 @@ const els = {
   manualUrl: $("manualUrl"),
   manualBtn: $("manualBtn"),
   optionsBtn: $("optionsBtn"),
+  setupBox: $("setupBox"),
+  setupDownloadBtn: $("setupDownloadBtn"),
+  setupVerifyBtn: $("setupVerifyBtn"),
 };
+
+// Where the "one button" host package lives (GitHub Releases asset produced
+// by tools/build.js). Replace USERNAME with the actual GitHub account once
+// the repository is published; until then the wizard explains the package is
+// not published yet.
+const HOST_PACKAGE_URL =
+  "https://github.com/USERNAME/video-downloader/releases/latest/download/VideoDownloader-host-win64.zip";
 
 let currentPageUrl = "";
 let currentPageTitle = ""; // active tab <title> — used as the download filename
@@ -123,20 +133,39 @@ function prettyEta(eta) {
 }
 
 // ---------------------------------------------------------------------------
+// First-run setup wizard (shown when the native host is not reachable).
+// ---------------------------------------------------------------------------
+function showSetup() {
+  show(els.setupBox);
+}
+
+function hideSetup() {
+  hide(els.setupBox);
+}
+
+async function pingHost() {
+  setHost(msg("hostChecking"), "");
+  const ping = await send({ type: "PING_HOST" });
+  if (ping.ok) {
+    setHost(msg("hostOk"), "ok");
+    hideSetup();
+    setError("");
+  } else {
+    setHost(msg("hostDown"), "err");
+    showSetup();
+    setError(ping.error || msg("hostConnFailed"));
+  }
+  return ping.ok;
+}
+
+// ---------------------------------------------------------------------------
 // Boot.
 // ---------------------------------------------------------------------------
 async function init() {
   applyI18n();
 
-  // First, ping the host.
-  setHost(msg("hostChecking"), "");
-  const ping = await send({ type: "PING_HOST" });
-  if (ping.ok) {
-    setHost(msg("hostOk"), "ok");
-  } else {
-    setHost(msg("hostDown"), "err");
-    setError(ping.error || msg("hostConnFailed"));
-  }
+  // First, ping the host — a failed ping opens the setup wizard.
+  await pingHost();
 
   // Pull current state (active tab + detected streams + any prior result).
   const state = await send({ type: "GET_STATE" });
@@ -430,6 +459,20 @@ let cancelNoticed = false;
 els.analyseBtn.addEventListener("click", () => analyse(currentMasterUrl || currentPageUrl));
 els.cancelBtn.addEventListener("click", () => send({ type: "KILL" }));
 els.optionsBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+// Setup wizard: download the host package, then re-check the connection.
+els.setupDownloadBtn.addEventListener("click", () => {
+  if (HOST_PACKAGE_URL.includes("USERNAME")) {
+    setError(msg("setupNotPublished"));
+    return;
+  }
+  chrome.downloads.download({ url: HOST_PACKAGE_URL }, () => {
+    void chrome.runtime.lastError; // download failures are visible in the shelf
+  });
+});
+els.setupVerifyBtn.addEventListener("click", () => {
+  pingHost();
+});
 
 // Manual URL entry: analyse an arbitrary URL (e.g. a m3u8 copied from DevTools).
 function analyseManual() {

@@ -28,8 +28,10 @@
 // ===========================================================================
 
 const { spawn } = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const https = require("https");
 
 // ---------------------------------------------------------------------------
 // Locate yt-dlp and ffmpeg executables.
@@ -46,7 +48,7 @@ function resolveExe(name) {
 }
 const YT_DLP = resolveExe("yt-dlp");
 const FFMPEG = resolveExe("ffmpeg");
-const HOST_VERSION = "1.1.0";
+const HOST_VERSION = "1.2.0";
 
 // Optional simple logging to a file for debugging (not required for operation).
 const LOG_FILE = process.env.VD_LOG ? path.join(__dirname, "host.log") : null;
@@ -129,7 +131,9 @@ function maybeExitAfterJob() {
 // ---------------------------------------------------------------------------
 function listFormats(url, pageUrl) {
   return new Promise((resolve) => {
-    const args = ["-J", "--no-playlist", "--no-warnings"];
+    // --no-update: yt-dlp must not self-update or nag about it — updates are
+    // our controlled channel's job (see maybeUpdateYtDlp).
+    const args = ["-J", "--no-playlist", "--no-warnings", "--no-update"];
     if (pageUrl) args.push("--referer", pageUrl);
     args.push(url);
     const proc = spawn(YT_DLP, args, { windowsHide: true });
@@ -302,6 +306,8 @@ function startDownload(url, pageUrl, ytFormat, outdir, pageTitle, concurrent) {
     "--merge-output-format",
     "mp4",
     "--no-overwrites",
+    // Updates are our controlled channel's job (see maybeUpdateYtDlp).
+    "--no-update",
     "--concurrent-fragments",
     String(fragCount),
     // Keep .part files: a cancelled/killed download then leaves a clearly
@@ -426,6 +432,204 @@ function isValidUrl(u) {
 }
 
 // ---------------------------------------------------------------------------
+// yt-dlp update channel (controlled by the project maintainer).
+//
+// We do NOT use `yt-dlp -U`: that would let an upstream release reach user
+// machines without our review. Instead the host reads OUR version manifest
+// (a small JSON in the project's GitHub repository) and only applies an
+// update when the manifest explicitly lists a newer version:
+//
+//   {
+//     "schema": 1,
+//     "disabled": false,                       <- kill switch
+//     "ytDlp": {
+//       "version": "2026.08.19",               <- lexicographic date compare
+//       "sha256": "<hex digest of the exe>",
+//       "url": "https://github.com/yt-dlp/yt-dlp/releases/download/..."
+//     }
+//   }
+//
+// Pipeline: fetch manifest -> newer? -> download -> sha256 -> verify the
+// binary actually runs (--version) -> backup old exe -> atomic swap -> state
+// file. Any failure keeps the old binary. Checks are throttled to once per
+// 24 h and never run while a job is active.
+// ---------------------------------------------------------------------------
+const UPDATE_MANIFEST_URL =
+  process.env.VD_UPDATE_URL ||
+  "https://raw.githubusercontent.com/USERNAME/video-downloader/main/updates/manifest.json";
+const UPDATE_STATE_FILE = path.join(__dirname, "update-state.json");
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MANIFEST_MAX_BYTES = 1024 * 1024;
+const EXE_MAX_BYTES = 80 * 1024 * 1024;
+
+function readUpdateState() {
+  try {
+    return JSON.parse(fs.readFileSync(UPDATE_STATE_FILE, "utf8"));
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeUpdateState(state) {
+  try {
+    fs.writeFileSync(UPDATE_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (_) {}
+}
+
+function httpsGetFollow(url, { maxBytes, headers = {} } = {}) {
+  return new Promise((resolve, reject) => {
+    // http:// support is for local test harnesses / mirrors; the production
+    // update manifest URL is https.
+    const transport = url.startsWith("http://") ? require("http") : https;
+    const request = (u, redirects) => {
+      if (redirects > 5) return reject(new Error("too many redirects"));
+      let size = 0;
+      const req = transport.get(
+        u,
+        { headers: { "User-Agent": "video-downloader-host", ...headers }, timeout: 20000 },
+        (res) => {
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            res.resume();
+            return request(new URL(res.headers.location, u).href, redirects + 1);
+          }
+          if (res.statusCode !== 200) {
+            res.resume();
+            return reject(new Error("HTTP " + res.statusCode));
+          }
+          const chunks = [];
+          res.on("data", (d) => {
+            size += d.length;
+            if (maxBytes && size > maxBytes) {
+              req.destroy();
+              reject(new Error("response exceeds size limit"));
+              return;
+            }
+            chunks.push(d);
+          });
+          res.on("end", () => resolve(Buffer.concat(chunks)));
+          res.on("error", reject);
+        },
+      );
+      req.on("timeout", () => req.destroy(new Error("timeout")));
+      req.on("error", reject);
+    };
+    request(url, 0);
+  });
+}
+
+function runVersionProbe(exePath) {
+  return new Promise((resolve) => {
+    try {
+      const proc = spawn(exePath, ["--version"], { windowsHide: true, timeout: 20000 });
+      let out = "";
+      proc.stdout.on("data", (d) => (out += d.toString("utf8")));
+      proc.on("error", () => resolve(null));
+      proc.on("close", (code) => {
+        const v = out.trim().split(/\r?\n/)[0] || "";
+        resolve(code === 0 && /^\d{4}\.\d{2}\.\d{2}/.test(v) ? v : null);
+      });
+    } catch (_) {
+      resolve(null);
+    }
+  });
+}
+
+async function maybeUpdateYtDlp() {
+  if (currentJob) return; // never touch the binary mid-download
+  const state = readUpdateState();
+  const now = Date.now();
+  if (state.lastCheck && now - state.lastCheck < UPDATE_CHECK_INTERVAL_MS) return;
+
+  const markChecked = (extra) => writeUpdateState({ ...state, lastCheck: now, ...(extra || {}) });
+
+  let manifest;
+  try {
+    const buf = await httpsGetFollow(UPDATE_MANIFEST_URL, { maxBytes: MANIFEST_MAX_BYTES });
+    manifest = JSON.parse(buf.toString("utf8"));
+  } catch (e) {
+    logToFile("update: manifest unavailable (" + e.message + ")");
+    markChecked();
+    return;
+  }
+  if (!manifest || manifest.schema !== 1 || manifest.disabled) {
+    logToFile("update: manifest disabled or unknown schema — skipping");
+    markChecked();
+    return;
+  }
+  const target = manifest.ytDlp;
+  if (!target || !target.version || !target.sha256 || !isValidUrl(target.url)) {
+    logToFile("update: malformed manifest entry — skipping");
+    markChecked();
+    return;
+  }
+
+  // Local version: trusted recorded state first, else probe the binary.
+  let localVersion = state.installedVersion || null;
+  if (!localVersion) {
+    localVersion = await runVersionProbe(YT_DLP);
+    if (!localVersion) {
+      logToFile("update: cannot determine local yt-dlp version — skipping");
+      markChecked();
+      return;
+    }
+  }
+  if (target.version <= localVersion) {
+    markChecked({ installedVersion: localVersion });
+    return; // up to date
+  }
+
+  logToFile("update: downloading yt-dlp " + target.version + " (local " + localVersion + ")");
+  let newExe;
+  try {
+    newExe = await httpsGetFollow(target.url, { maxBytes: EXE_MAX_BYTES });
+  } catch (e) {
+    logToFile("update: download failed (" + e.message + ")");
+    markChecked();
+    return;
+  }
+  const digest = crypto.createHash("sha256").update(newExe).digest("hex");
+  if (digest !== String(target.sha256).toLowerCase()) {
+    logToFile("update: SHA-256 mismatch — keeping current binary");
+    markChecked();
+    return;
+  }
+
+  // Verify the new binary actually runs before touching the old one.
+  const probePath = YT_DLP + ".new";
+  try {
+    fs.writeFileSync(probePath, newExe);
+  } catch (e) {
+    logToFile("update: cannot write temp file (" + e.message + ")");
+    markChecked();
+    return;
+  }
+  const probed = await runVersionProbe(probePath);
+  if (!probed) {
+    logToFile("update: new binary failed --version probe — discarding");
+    try {
+      fs.unlinkSync(probePath);
+    } catch (_) {}
+    markChecked();
+    return;
+  }
+
+  // Backup → swap → state. Restore the backup if the swap goes wrong.
+  const backupPath = YT_DLP + ".bak";
+  try {
+    if (fs.existsSync(YT_DLP)) fs.copyFileSync(YT_DLP, backupPath);
+    fs.renameSync(probePath, YT_DLP);
+    writeUpdateState({ lastCheck: now, installedVersion: target.version });
+    logToFile("update: yt-dlp updated to " + target.version);
+  } catch (e) {
+    logToFile("update: swap failed (" + e.message + ") — restoring backup");
+    try {
+      if (fs.existsSync(backupPath)) fs.copyFileSync(backupPath, YT_DLP);
+    } catch (_) {}
+    markChecked();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Command dispatcher.
 // ---------------------------------------------------------------------------
 async function handle(msg) {
@@ -507,6 +711,12 @@ async function handle(msg) {
 // ---------------------------------------------------------------------------
 readMessages(handle);
 logToFile("Host started. YT_DLP=" + YT_DLP + " FFMPEG=" + FFMPEG);
+
+// Update check runs in the background shortly after startup so it never
+// delays the first PING; it is throttled to once per 24 h internally.
+setTimeout(() => {
+  maybeUpdateYtDlp().catch((e) => logToFile("update: unexpected error " + e.message));
+}, 5000);
 
 // When the browser closes the port (service worker death, popup gone) stdin
 // ends. If a job is running we let it finish — killing it would silently

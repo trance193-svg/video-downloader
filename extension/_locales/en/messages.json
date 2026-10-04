@@ -75,6 +75,17 @@
     "message": "Connection to the native host was lost. Restart the browser or reinstall the host."
   },
 
+  "setupTitle": { "message": "A local downloader is required" },
+  "setupText": {
+    "message": "Downloads are performed by a small app on your computer. Two clicks to install — no admin rights."
+  },
+  "setupDownload": { "message": "1. Download the package (Windows)" },
+  "setupStep2": { "message": "2. Unzip it and run Установить.bat inside" },
+  "setupVerify": { "message": "3. Installed — check again" },
+  "setupNotPublished": {
+    "message": "The package is not published yet — the link appears after the first release."
+  },
+
   "mAnalysing": { "message": "Analysing the link…" },
   "mDownloading": { "message": "Starting the download…" },
   "mReplacedList": { "message": "Previous job interrupted — analysing." },

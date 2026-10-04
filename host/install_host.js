@@ -37,6 +37,9 @@ const LAUNCHER = path.join(HERE, "run_host.bat");
 const PINNED_EXTENSION_ID = "eaeknaeblkegllnbgkhachbplimcldhp";
 
 function findNode() {
+  // 0) node.exe bundled next to this script (self-contained package layout)
+  const sibling = path.join(HERE, "node.exe");
+  if (fs.existsSync(sibling)) return sibling;
   // 1) node on PATH
   const which = spawnSync("where", ["node"], { encoding: "utf8" });
   if (which.status === 0) {
@@ -92,7 +95,13 @@ function registerInRegistry(manifestPath) {
     const r = spawnSync("reg", ["add", key, "/ve", "/t", "REG_SZ", "/d", manifestPath, "/f"], {
       encoding: "utf8",
     });
-    results.push({ key, ok: r.status === 0, err: r.stderr });
+    results.push({
+      key,
+      ok: r.status === 0,
+      status: r.status,
+      stderr: (r.stderr || "").trim(),
+      spawnError: r.error ? r.error.message : null,
+    });
   }
   return results;
 }
@@ -149,12 +158,31 @@ function main() {
 
   console.log("\nРегистрация в реестре Windows (HKCU)…");
   const reg = registerInRegistry(manifestPath);
+  let anyFail = false;
   for (const r of reg) {
     console.log((r.ok ? "  OK   " : "  FAIL ") + r.key);
-    if (!r.ok && r.err) console.log("        " + r.err.trim());
+    if (!r.ok) {
+      anyFail = true;
+      if (r.spawnError) console.log("        spawn error: " + r.spawnError);
+      if (r.stderr) console.log("        reg: " + r.stderr);
+      console.log(
+        "        (exit code " +
+          r.status +
+          " — антивирус может тихо блокировать запись; см. ручную команду ниже)",
+      );
+    }
   }
 
   console.log("\nГотово.");
+  if (anyFail) {
+    console.log("\nНекоторые записи реестра не удалось создать автоматически.");
+    console.log(
+      "Выполните вручную в командной строке (та же строка для Edge/Brave, замените Google\\Chrome):",
+    );
+    console.log(
+      `  reg add "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${HOST_NAME}" /ve /t REG_SZ /d "${manifestPath}" /f`,
+    );
+  }
   console.log("\nЗатем перезапустите Chrome/Edge. Расширение сможет связываться с хостом.");
 }
 
