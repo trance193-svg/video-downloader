@@ -81,9 +81,6 @@
   "setupDownload": { "message": "1. Скачать пакет (Windows)" },
   "setupStep2": { "message": "2. Распакуйте zip и запустите Установить.bat" },
   "setupVerify": { "message": "3. Я установил — проверить" },
-  "setupNotPublished": {
-    "message": "Пакет ещё не опубликован — ссылка появится после первого релиза."
-  },
 
   "mAnalysing": { "message": "Анализирую ссылку…" },
   "mDownloading": { "message": "Начинаю скачивание…" },

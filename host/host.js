@@ -456,7 +456,7 @@ function isValidUrl(u) {
 // ---------------------------------------------------------------------------
 const UPDATE_MANIFEST_URL =
   process.env.VD_UPDATE_URL ||
-  "https://raw.githubusercontent.com/USERNAME/video-downloader/main/updates/manifest.json";
+  "https://raw.githubusercontent.com/trance193-svg/video-downloader/main/updates/manifest.json";
 const UPDATE_STATE_FILE = path.join(__dirname, "update-state.json");
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const MANIFEST_MAX_BYTES = 1024 * 1024;

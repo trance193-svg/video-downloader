@@ -46,11 +46,10 @@ const els = {
 };
 
 // Where the "one button" host package lives (GitHub Releases asset produced
-// by tools/build.js). Replace USERNAME with the actual GitHub account once
-// the repository is published; until then the wizard explains the package is
-// not published yet.
+// by tools/build.js). If the release is missing, the wizard explains the
+// package is not published yet.
 const HOST_PACKAGE_URL =
-  "https://github.com/USERNAME/video-downloader/releases/latest/download/VideoDownloader-host-win64.zip";
+  "https://github.com/trance193-svg/video-downloader/releases/latest/download/VideoDownloader-host-win64.zip";
 
 let currentPageUrl = "";
 let currentPageTitle = ""; // active tab <title> — used as the download filename
@@ -462,10 +461,6 @@ els.optionsBtn.addEventListener("click", () => chrome.runtime.openOptionsPage())
 
 // Setup wizard: download the host package, then re-check the connection.
 els.setupDownloadBtn.addEventListener("click", () => {
-  if (HOST_PACKAGE_URL.includes("USERNAME")) {
-    setError(msg("setupNotPublished"));
-    return;
-  }
   chrome.downloads.download({ url: HOST_PACKAGE_URL }, () => {
     void chrome.runtime.lastError; // download failures are visible in the shelf
   });

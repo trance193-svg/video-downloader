@@ -82,9 +82,6 @@
   "setupDownload": { "message": "1. Download the package (Windows)" },
   "setupStep2": { "message": "2. Unzip it and run Установить.bat inside" },
   "setupVerify": { "message": "3. Installed — check again" },
-  "setupNotPublished": {
-    "message": "The package is not published yet — the link appears after the first release."
-  },
 
   "mAnalysing": { "message": "Analysing the link…" },
   "mDownloading": { "message": "Starting the download…" },
