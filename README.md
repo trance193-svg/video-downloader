@@ -38,7 +38,7 @@ yt-dlp.exe + ffmpeg.exe  →  файл в %USERPROFILE%\Downloads\VideoDownloade
 
 ### Путь А — готовый пакет (рекомендуется)
 
-1. Скачайте `VideoDownloader-host-win64.zip` (страница релизов проекта) и распакуйте в любую папку.
+1. Скачайте [`VideoDownloader-host-win64.zip`](https://github.com/trance193-svg/video-downloader/releases/latest/download/VideoDownloader-host-win64.zip) (последний релиз) и распакуйте в любую папку.
 2. Запустите **`Установить.bat`** — он зарегистрирует локальный загрузчик (без прав администратора).
 3. Установите расширение из Chrome Web Store (или загрузите папку `extension` как распакованное — см. путь Б).
 4. Перезапустите браузер. При первом открытии попап покажет статус **«host: подключён»**.
