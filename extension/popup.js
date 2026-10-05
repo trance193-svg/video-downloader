@@ -54,7 +54,7 @@ const HOST_PACKAGE_URL =
 let currentPageUrl = "";
 let currentPageTitle = ""; // active tab <title> — used as the download filename
 let currentAnalysedUrl = ""; // the URL actually passed to yt-dlp (may differ from page URL)
-let currentMasterUrl = ""; // master m3u8 if detected — preferred over page URL
+let currentStreamUrl = ""; // best detected stream (freshest master) — preferred over page URL
 
 // ---------------------------------------------------------------------------
 // i18n.
@@ -174,88 +174,58 @@ async function init() {
     els.pageUrl.textContent = currentPageUrl;
     els.pageUrl.title = currentPageUrl;
   }
-  // Restore the URL that produced the last analysis — without this, "Скачать"
-  // after a popup reopen falls back to the page URL (which yt-dlp can't handle
-  // for sites without an extractor).
-  if (state.lastListResultUrl) currentAnalysedUrl = state.lastListResultUrl;
-  if (state.streams) renderDetected(state.streams);
-  if (state.lastListResult) renderListResult(state.lastListResult);
+  renderDetected(state.streams || []);
+
+  // A saved analysis belongs to the video it was made on. Restoring it on a
+  // different page made "Скачать" silently reuse the previous video's URL —
+  // the "it downloads the same video again" report. Restore it only when it
+  // was produced from the URL we would analyse right now.
+  const candidate = currentStreamUrl || currentPageUrl;
+  const resultFresh = !!state.lastListResultUrl && state.lastListResultUrl === candidate;
+  if (resultFresh) {
+    currentAnalysedUrl = state.lastListResultUrl;
+    if (state.lastListResult) renderListResult(state.lastListResult);
+    if (state.lastDone) renderDone(state.lastDone);
+    if (state.lastError) setError(translateMsg(state.lastError));
+  }
+  // Live job feedback stays regardless of the page — a running download can
+  // (and should) be visible so it can be cancelled.
   if (state.lastProgress) renderProgress(state.lastProgress);
-  if (state.lastDone) renderDone(state.lastDone);
-  if (state.lastError) setError(translateMsg(state.lastError));
 }
 
 // ---------------------------------------------------------------------------
 // Detected streams (from webRequest + content script).
 // ---------------------------------------------------------------------------
+// The list itself is not shown: pages often produce several look-alike master
+// playlists, and picking among near-identical rows only confuses. The main
+// "Найти видео" button analyses the single best candidate — the most recently
+// requested master playlist (falling back to any manifest, then a media
+// file). The section appears only to say nothing was detected yet.
+function bestDetectedStream(streams) {
+  return (
+    (streams || [])
+      .filter((s) => !/^(blob:|data:|media-source:)/i.test(s.url))
+      .sort((a, b) => {
+        const rank = (s) => (s.master ? 0 : s.type === "playlist" ? 1 : 2);
+        return rank(a) - rank(b) || (b.ts || 0) - (a.ts || 0);
+      })[0] || null
+  );
+}
+
 function renderDetected(streams) {
-  els.detectedList.innerHTML = "";
-  if (!streams || streams.length === 0) {
+  const best = bestDetectedStream(streams);
+  if (!best) {
+    currentStreamUrl = "";
+    els.detectedList.innerHTML = "";
     const e = document.createElement("div");
     e.className = "empty";
     e.textContent = msg("emptyDetected");
     els.detectedList.appendChild(e);
+    show(els.detectedBox);
     return;
   }
-  // Dedupe and prefer manifests first; masters above sub-playlists. Within
-  // the same rank, the most recently requested stream (current video) wins —
-  // a master left over from a previously watched video must not take the top
-  // spot or get picked by the main button.
-  const seen = new Set();
-  const ordered = streams
-    .filter((s) => !/^(blob:|data:|media-source:)/i.test(s.url))
-    .sort((a, b) => {
-      const rank = (s) => (s.master ? 0 : s.type === "playlist" ? 1 : 2);
-      return rank(a) - rank(b) || (b.ts || 0) - (a.ts || 0);
-    });
-  for (const s of ordered) {
-    if (seen.has(s.url)) continue;
-    seen.add(s.url);
-
-    const item = document.createElement("div");
-    item.className = "detected-item";
-
-    const url = document.createElement("span");
-    url.className = "durl";
-    url.textContent = prettyUrl(s.url);
-    url.title = s.url;
-
-    const tag = document.createElement("span");
-    tag.className = "dtype " + (s.master ? "master" : s.type === "playlist" ? "playlist" : "");
-    tag.textContent = s.master
-      ? msg("masterTag")
-      : s.type === "playlist"
-        ? "HLS/DASH"
-        : msg("mediaTag");
-
-    const open = document.createElement("button");
-    open.className = "open linklike";
-    open.textContent = msg("analyseThis");
-    open.title = msg("analyseThisTitle");
-    open.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      analyse(s.url);
-    });
-
-    item.appendChild(url);
-    item.appendChild(tag);
-    item.appendChild(open);
-    els.detectedList.appendChild(item);
-  }
-  // Remember the first master so the big button auto-uses it.
-  const master = ordered.find((s) => s.master);
-  currentMasterUrl = master ? master.url : "";
-}
-
-function prettyUrl(u) {
-  try {
-    const x = new URL(u);
-    let p = x.pathname;
-    if (p.length > 40) p = p.slice(0, 20) + "…" + p.slice(-12);
-    return x.host + p + (x.search ? "?…" : "");
-  } catch (_) {
-    return u;
-  }
+  currentStreamUrl = best.url;
+  hide(els.detectedBox);
 }
 
 // ---------------------------------------------------------------------------
@@ -455,7 +425,7 @@ let cancelNoticed = false;
 // ---------------------------------------------------------------------------
 // Find-video button: prefer a detected master m3u8 (has audio) over the page
 // URL (which yt-dlp often can't handle anyway).
-els.analyseBtn.addEventListener("click", () => analyse(currentMasterUrl || currentPageUrl));
+els.analyseBtn.addEventListener("click", () => analyse(currentStreamUrl || currentPageUrl));
 els.cancelBtn.addEventListener("click", () => send({ type: "KILL" }));
 els.optionsBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
 

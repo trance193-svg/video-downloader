@@ -21,10 +21,6 @@
   "emptyDetected": {
     "message": "Nothing detected yet. Start playing the video on the page."
   },
-  "masterTag": { "message": "HLS master" },
-  "mediaTag": { "message": "media" },
-  "analyseThis": { "message": "analyse" },
-  "analyseThisTitle": { "message": "Analyse this URL via yt-dlp" },
 
   "noActiveTab": { "message": "No active tab with a URL." },
   "badManualUrl": { "message": "Enter a full URL starting with http(s)://" },

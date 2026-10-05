@@ -23,10 +23,6 @@
   "emptyDetected": {
     "message": "Пока ничего не перехвачено. Запустите воспроизведение видео на странице."
   },
-  "masterTag": { "message": "HLS мастер" },
-  "mediaTag": { "message": "медиа" },
-  "analyseThis": { "message": "анализ" },
-  "analyseThisTitle": { "message": "Анализировать этот URL через yt-dlp" },
 
   "noActiveTab": { "message": "Нет активной вкладки с URL." },
   "badManualUrl": { "message": "Введите полный URL, начиная с http(s)://" },
