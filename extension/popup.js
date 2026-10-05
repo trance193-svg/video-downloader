@@ -197,16 +197,16 @@ function renderDetected(streams) {
     els.detectedList.appendChild(e);
     return;
   }
-  // Dedupe and prefer manifests first; masters above sub-playlists.
-  // media-source: is a fake scheme this extension used to report for
-  // MediaStream sources — it is not a downloadable URL, so drop it along
-  // with blob:/data:.
+  // Dedupe and prefer manifests first; masters above sub-playlists. Within
+  // the same rank, the most recently requested stream (current video) wins —
+  // a master left over from a previously watched video must not take the top
+  // spot or get picked by the main button.
   const seen = new Set();
   const ordered = streams
     .filter((s) => !/^(blob:|data:|media-source:)/i.test(s.url))
     .sort((a, b) => {
       const rank = (s) => (s.master ? 0 : s.type === "playlist" ? 1 : 2);
-      return rank(a) - rank(b);
+      return rank(a) - rank(b) || (b.ts || 0) - (a.ts || 0);
     });
   for (const s of ordered) {
     if (seen.has(s.url)) continue;

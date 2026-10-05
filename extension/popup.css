@@ -231,6 +231,7 @@ button:disabled {
   gap: 6px;
   max-height: 220px;
   overflow-y: auto;
+  scrollbar-width: none;
 }
 .video-item {
   display: flex;
@@ -260,8 +261,17 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 120px;
+  max-height: 150px;
   overflow-y: auto;
+  /* Scrollable but chrome-free: the native bars overflowed the narrow
+     card and dragged attention; the wheel still scrolls the list. */
+  scrollbar-width: none;
+}
+.detected-list::-webkit-scrollbar,
+.videos::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 .detected-item {
   display: flex;
@@ -274,10 +284,13 @@ button:disabled {
   font-size: 11px;
 }
 .detected-item .durl {
+  /* Flex with min-width:0 instead of a fixed max-width — the fixed cap made
+     rows wider than the card and produced a horizontal scrollbar. */
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 250px;
   color: var(--text);
   direction: ltr;
 }

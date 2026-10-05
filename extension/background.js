@@ -68,8 +68,16 @@ async function addStreamToTab(tabId, stream) {
   const key = "tab_" + tabId;
   const data = await chrome.storage.session.get(key);
   const list = data[key] || [];
-  // Dedupe by URL.
-  if (list.some((s) => s.url === stream.url)) return;
+  // Dedupe by URL, refreshing ts: a stream the page is still requesting is
+  // the current video — without this a master from the previous page would
+  // keep sorting above the fresh one.
+  const existing = list.find((s) => s.url === stream.url);
+  if (existing) {
+    existing.ts = stream.ts;
+    existing.master = existing.master || stream.master;
+    await chrome.storage.session.set({ [key]: list });
+    return;
+  }
   list.push(stream);
   // Keep manifests (m3u8/mpd) — they're the master playlists yt-dlp needs —
   // but drop the flood of per-segment .ts/.mp4 fragment requests that would
@@ -103,15 +111,42 @@ async function updateBadge(tabId) {
 // Clean up when a tab closes.
 chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.session.remove("tab_" + tabId).catch(() => {});
+  chrome.storage.session.remove("path_" + tabId).catch(() => {});
 });
 
 // Reset detection on navigation to a new document. Update the badge only
 // after the stored list is actually gone, otherwise it can read stale data.
 chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === "loading") {
+  const resetList = () =>
     chrome.storage.session
       .remove("tab_" + tabId)
       .then(() => updateBadge(tabId))
+      .catch(() => {});
+
+  if (info.status === "loading") {
+    // Full navigation: forget the streams and the remembered path.
+    chrome.storage.session.remove("path_" + tabId).catch(() => {});
+    resetList();
+    return;
+  }
+
+  // Same-document (SPA) navigations arrive as a bare url change. Reset when
+  // the path actually changed — but not on replaceState spam like ?t= time
+  // updates, which keep the path and must not wipe a playing list.
+  if (info.url) {
+    let next;
+    try {
+      next = new URL(info.url).pathname;
+    } catch (_) {
+      return;
+    }
+    chrome.storage.session
+      .get("path_" + tabId)
+      .then((data) => {
+        const prev = data["path_" + tabId];
+        if (prev !== undefined && prev !== next) return resetList();
+      })
+      .then(() => chrome.storage.session.set({ ["path_" + tabId]: next }))
       .catch(() => {});
   }
 });
